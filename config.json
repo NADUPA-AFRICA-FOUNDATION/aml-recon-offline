@@ -1,0 +1,12 @@
+{
+  "internal_email_domains": ["safaricom.co.ke"],
+  "internal_role_markers": ["safaricom", "employee", "staff", "internal"],
+  "critical_fields": [
+    "User ID",
+    "Username",
+    "Full Name",
+    "Assignment ID",
+    "Assignment Title",
+    "Completion Status"
+  ]
+}

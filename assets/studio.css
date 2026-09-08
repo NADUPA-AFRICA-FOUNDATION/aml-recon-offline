@@ -1,0 +1,49 @@
+:root { --ink:#172b36; --muted:#526673; --line:#dce4e8; --teal:#087f73; }
+.stApp { background:#f4f6f8; }
+.block-container { max-width:1400px; padding-top:2rem; padding-bottom:3rem; }
+header[data-testid="stHeader"] { background:#f4f6f8; }
+[data-testid="stSidebar"] { background:#fff; border-right:1px solid var(--line); }
+[data-testid="stSidebar"] h3 { font-size:1.05rem; }
+[data-testid="stSidebar"] textarea { font-size:.88rem; }
+.brand { display:flex; align-items:center; gap:12px; padding:0 0 26px; color:var(--ink); font-size:1.25rem; font-weight:750; }
+.brand-mark { display:grid; place-items:center; width:40px; height:40px; background:#087f73; color:white; border-radius:12px; font-size:.85rem; letter-spacing:.03em; }
+.brand small { display:block; color:var(--muted); font-size:.72rem; font-weight:500; margin-top:2px; }
+.eyebrow { color:#526673; font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+.hero { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:8px 0 26px; }
+.hero h1 { color:var(--ink); font-size:clamp(1.9rem,3vw,2.65rem); font-weight:750; letter-spacing:-.045em; line-height:1.15; padding:10px 0; }
+.hero p { color:var(--muted); max-width:660px; margin:0; line-height:1.6; }
+.local-badge { color:#07665d; background:#e5f3ed; border:1px solid #b9ddd0; border-radius:999px; padding:8px 13px; white-space:nowrap; font-size:.78rem; font-weight:650; }
+.workflow { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); background:white; border-radius:12px; margin:0 0 26px; overflow:hidden; }
+.step { display:flex; gap:12px; align-items:center; padding:17px 20px; color:var(--muted); font-size:.85rem; }
+.step + .step { border-left:1px solid var(--line); }
+.step b { display:grid; place-items:center; border-radius:50%; background:#edf2f4; width:28px; height:28px; flex-shrink:0; font-size:.8rem; }
+.step.active { color:#07665d; background:#eff8f5; }
+.step.active b { background:#087f73; color:white; }
+[data-testid="stVerticalBlockBorderWrapper"] > div { border-color:var(--line) !important; border-radius:14px !important; }
+h2, h3 { letter-spacing:-.025em; }
+h3 { font-size:1.18rem !important; }
+[data-testid="stFileUploader"] { border:1px dashed #94b4b8; border-radius:12px; padding:8px; background:#f8fbfc; }
+[data-testid="stFileUploaderDropzone"] { background:#f8fbfc; min-height:155px; }
+[data-testid="stMetric"] { background:white; border:1px solid var(--line); border-radius:12px; padding:18px; }
+[data-testid="stMetricLabel"] { color:var(--muted); font-size:.8rem; }
+[data-testid="stMetricValue"] { color:var(--ink); font-variant-numeric:tabular-nums; font-size:1.8rem; font-weight:700; }
+.stButton > button, .stDownloadButton > button { min-height:44px; border-radius:8px; font-weight:650; transition:background .18s; }
+button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline:3px solid #087f73 !important; outline-offset:3px; }
+.report-row { display:flex; align-items:flex-start; gap:12px; margin:17px 0; }
+.report-num { color:#087f73; background:#e8f4f0; border-radius:6px; padding:4px 7px; font-size:.75rem; font-weight:700; }
+.report-row strong { color:var(--ink); font-size:.9rem; }
+.report-row p { color:var(--muted); font-size:.82rem; margin:3px 0 0; }
+.empty-state { border:1px dashed #bfced5; border-radius:14px; padding:34px 24px; text-align:center; margin:22px 0; background:#f9fbfc; }
+.empty-state h3 { margin:0; padding:0 0 8px; }
+.empty-state p { color:var(--muted); font-size:.9rem; margin:0; }
+.footer-note { color:var(--muted); font-size:.75rem; padding:20px 0; }
+[data-baseweb="tab-list"] { gap:20px; border-bottom:1px solid var(--line); }
+[data-baseweb="tab"] { min-height:48px; }
+@media (max-width:700px) {
+ .block-container { padding:1.5rem 1rem; }
+ .hero { align-items:flex-start; flex-direction:column; gap:14px; }
+ .step { padding:12px 8px; gap:7px; font-size:.72rem; }
+ .step b { width:23px; height:23px; }
+}
+@media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; transition:none !important; } }
+.small-note { color:var(--muted); font-size:.82rem; line-height:1.6; margin-top:10px; }
