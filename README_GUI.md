@@ -123,3 +123,14 @@ python -m unittest discover -s tests -v
 
 The tests cover startup, reconciliation, seven-sheet export, duplicate filenames,
 changed rules, exception search and processing errors using synthetic records.
+
+## When an export is not recognised
+
+The importer detects known column headings within the first 50 non-empty rows,
+so report titles and blank rows above the table are supported. CSV imports accept
+comma, semicolon, tab and pipe separators, including Excel `sep=` declarations.
+If no training records are recognised, the error lists the detected headings.
+Check these against the expected names (such as User ID, Email, Full Name,
+Assignment Title and Completion Status). Custom headings can be mapped through
+`column_aliases` in a CLI configuration file; for the GUI, extend
+`DEFAULT_CONFIG["column_aliases"]` in `aml_reconcile.py`.

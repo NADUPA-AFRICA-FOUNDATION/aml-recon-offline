@@ -11,6 +11,8 @@ Reads .xlsx/.xlsm/.xls/.csv files recursively. No network/API/AI required.
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import re
 import sys
@@ -117,16 +119,56 @@ def source_files(folder: Path) -> List[Path]:
     )
 
 
-def read_file(path: Path) -> List[Tuple[str, pd.DataFrame]]:
+def table_from_rows(raw: pd.DataFrame, aliases: Dict[str, Sequence[str]]) -> pd.DataFrame:
+    """Find a recognised header near the top without fuzzy column matching."""
+    raw = raw.dropna(how="all").reset_index(drop=True)
+    if raw.empty:
+        return pd.DataFrame()
+    lookup = {
+        header_key(label): target
+        for target, labels in aliases.items()
+        for label in [target, *labels]
+    }
+    def score(row: pd.Series) -> int:
+        return len({lookup[header_key(value)] for value in row if header_key(value) in lookup})
+
+    scores = [score(row) for _, row in raw.head(50).iterrows()]
+    header = 0
+    # A single matching word in a title is not enough to identify a later header.
+    for index, count in enumerate(scores):
+        if count >= 2:
+            header = index
+            break
+    columns = [clean(value) or f"Unnamed: {index}" for index, value in enumerate(raw.iloc[header])]
+    result = raw.iloc[header + 1:].copy()
+    result.columns = columns
+    return result.reset_index(drop=True)
+
+
+def read_file(path: Path, aliases: Optional[Dict[str, Sequence[str]]] = None) -> List[Tuple[str, pd.DataFrame]]:
+    aliases = aliases if aliases is not None else DEFAULT_CONFIG["column_aliases"]
     if path.suffix.lower() == ".csv":
-        for enc in ("utf-8-sig", "utf-8", "latin-1"):
+        for enc in ("utf-8-sig", "utf-16", "latin-1"):
             try:
-                return [("CSV", pd.read_csv(path, dtype=object, encoding=enc))]
-            except UnicodeDecodeError:
+                contents = path.read_text(encoding=enc)
+                break
+            except UnicodeError:
                 continue
-        raise RuntimeError(f"Could not decode CSV: {path}")
-    sheets = pd.read_excel(path, sheet_name=None, dtype=object)
-    return [(name, df) for name, df in sheets.items() if not df.empty]
+        # Evaluate common delimiters against known headings, including files with
+        # variable-width report titles and Excel's optional sep= declaration.
+        declaration = contents.splitlines()[0] if contents.splitlines() else ""
+        delimiters = [",", ";", "\t", "|"]
+        if declaration.lower().startswith("sep=") and len(declaration) == 5:
+            delimiters = [declaration[-1]]
+            contents = contents.partition("\n")[2]
+        candidates = []
+        for delimiter in delimiters:
+            rows = list(csv.reader(io.StringIO(contents), delimiter=delimiter))
+            frame = table_from_rows(pd.DataFrame(rows), aliases)
+            candidates.append((len(column_map(frame, aliases)), frame))
+        return [("CSV", max(candidates, key=lambda candidate: candidate[0])[1])]
+    sheets = pd.read_excel(path, sheet_name=None, dtype=object, header=None)
+    return [(name, table_from_rows(df, aliases)) for name, df in sheets.items() if not df.empty]
 
 
 def column_map(df: pd.DataFrame, aliases: Dict[str, Sequence[str]]) -> Dict[str, str]:
@@ -435,10 +477,13 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
         raise FileNotFoundError(f"No Excel/CSV files found in {input_dir.resolve()}")
 
     frames, offset = [], 0
+    import_notes = []
     print("Reading source files...")
     for path in files:
         file_count = 0
-        for sheet, df in read_file(path):
+        for sheet, df in read_file(path, cfg["column_aliases"]):
+            headings = ", ".join(str(column) for column in df.columns[:12])
+            import_notes.append(f"{path.name} / {sheet}: {len(df)} rows; headings: {headings or 'none'}")
             n = normalize(df, path, sheet, cfg, offset)
             meaningful = n[["User ID", "Username", "Full Name", "Assignment ID", "Assignment Title", "Completion Status"]].fillna("").astype(str).apply(lambda c: c.str.strip()).ne("").any(axis=1)
             n = n.loc[meaningful].copy()
@@ -447,7 +492,14 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
         print(f"  {path.name}: {file_count:,} records")
 
     if not frames:
-        raise ValueError("Files were readable but no meaningful training records were detected.")
+        raise ValueError(
+            "No training records could be recognised. Check that the export contains "
+            "a header row and learner or assignment data. Expected headings include "
+            "User ID, Email, Full Name, Assignment ID, Assignment Title or Completion Status. "
+            "Headers may appear within the first 50 non-empty rows. "
+            "If your headings differ, add them to column_aliases in the configuration. "
+            "Detected tables: " + "; ".join(import_notes)
+        )
 
     all_records = flag_repeats(pd.concat(frames, ignore_index=True))
     courses = course_summary(all_records)
