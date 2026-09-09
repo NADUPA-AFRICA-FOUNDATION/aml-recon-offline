@@ -81,6 +81,57 @@ This is a local address. Your uploaded files are processed on the computer runni
 
 The reconciliation engine itself does not use ChatGPT, an API, cloud storage, or an external web service. Uploaded files are written only to a temporary local processing folder during a run and the temporary workspace is deleted afterwards.
 
+### Work-device upload policies
+
+The browser interface looks like a website, but the supplied launcher binds it
+only to `127.0.0.1`. That loopback address is the same computer—not an internet
+site—and is not reachable from another device. Browser telemetry is disabled,
+and Streamlit's CORS and XSRF protections are explicitly enabled. The page uses
+plain HTTP on the local loopback connection; it should not be exposed on a LAN or
+public interface.
+
+An organisation's browser, DLP agent, or endpoint policy may still classify a
+file selection on `http://127.0.0.1:8501` as an upload. Do not bypass that
+control. Use one of these approved deployment patterns:
+
+1. **Preferred when browser uploads are restricted:** use the command-line
+   workflow. Put approved exports in `input/` and run `aml_reconcile.py`; for
+   independent verification, place the files beside the verifier config or use
+   `--data-dir`. No browser file picker is involved.
+2. **Local GUI after security approval:** ask IT/security to assess and, if
+   appropriate, allow the exact loopback origin `http://127.0.0.1:8501`. Do not
+   request a broad web-domain exception.
+3. **Organisation-hosted deployment:** treat it as a normal internal application:
+   place it behind the organisation's SSO/reverse proxy and TLS, restrict network
+   access, define retention and logging, patch dependencies, and complete the
+   organisation's privacy/security review. The bundled launcher is not an
+   authenticated multi-user server and must not be used for this pattern.
+
+Before approval, provide the security team with:
+
+- the source repository and locked/approved dependency versions;
+- the data classification of the LMS exports and generated workbook;
+- confirmation that processing is local and temporary files are deleted after
+  each run;
+- the loopback-only launch settings in `start_gui.py`;
+- the required input/output folders and their operating-system permissions;
+- evidence from endpoint monitoring that the process makes no outbound
+  connections during a representative run.
+
+Approval ultimately depends on your organisation's policy and security team;
+local processing alone does not automatically make the tool compliant.
+
+### Browser-free commands
+
+```bash
+python aml_reconcile.py --input ./input \
+  --output ./output/AML_Training_Full_Reconciliation.xlsx \
+  --config ./config.json
+
+python recon_verifier.py --config recon_config_aml_training.json \
+  --data-dir /approved/local/folder --report ./output/recon_report.md
+```
+
 ## Workbook output
 
 The GUI generates:
