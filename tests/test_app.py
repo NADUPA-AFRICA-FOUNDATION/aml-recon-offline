@@ -32,6 +32,7 @@ class StudioTests(unittest.TestCase):
         app = AppTest.from_file(str(ROOT / "app.py")).run()
         self.assertFalse(app.exception)
         self.assertTrue(app.button[0].disabled)
+        self.assertTrue(any("Reconcile." in item.value and "Prove it." in item.value for item in app.markdown))
         self.assertTrue(any("Your results will appear here" in item.value for item in app.markdown))
 
     def test_reconcile_export_and_invalidate_changed_rules(self):

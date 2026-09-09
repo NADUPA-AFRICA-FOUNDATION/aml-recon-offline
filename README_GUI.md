@@ -159,8 +159,10 @@ with:
 
 ## Interface improvements
 
-- A focused workspace with a three-step workflow and grouped workbook contents.
-- Consistent teal accents, readable metric cards, keyboard focus indicators and narrow-screen styles.
+- A high-contrast neo-brutalist workspace with a staged workflow and grouped workbook contents.
+- Centralized cream, red, yellow, violet, black-border and hard-shadow design tokens.
+- Mechanical button states, tactile cards, bold metric blocks, and an energetic audit-trail ticker.
+- Strong keyboard focus indicators, horizontal tab overflow, reduced-motion support, and responsive single-column layouts.
 - Searchable exceptions and clear empty, success and error states.
 - Results are cleared when exports or classification rules change, preventing stale downloads.
 - Separate uploads with identical filenames are preserved with numbered source prefixes.

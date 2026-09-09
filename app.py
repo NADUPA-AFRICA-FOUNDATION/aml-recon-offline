@@ -46,10 +46,11 @@ workflow.markdown(
     """
 <div class="hero">
   <div><div class="eyebrow">Compliance workspace / AML &amp; CFT</div>
-  <h1>Training reconciliation</h1>
-  <p>Turn your training exports into a clear, traceable view of participation, completion and exceptions.</p></div>
-  <div class="local-badge">Local processing enabled</div>
+  <h1>Reconcile.<br>Prove it.</h1>
+  <p>Drop the exports. Challenge every row. Leave with one loud, traceable source of truth.</p></div>
+  <div class="local-badge">● 100% local</div>
 </div>
+<div class="ticker" aria-hidden="true"><span>RAW FILES ✦ CONTROL TOTALS ✦ EXCEPTIONS ✦ AUDIT TRAIL ✦ NO CLOUD ✦ RAW FILES ✦ CONTROL TOTALS ✦ EXCEPTIONS ✦ AUDIT TRAIL ✦ NO CLOUD ✦&nbsp;</span></div>
 <div class="workflow" aria-label="Reconciliation workflow">
   <div class="step"><b>01</b> Add exports</div>
   <div class="step"><b>02</b> Review results</div>
@@ -89,8 +90,8 @@ with st.sidebar:
 upload_col, guide_col = st.columns([1.55, 1], gap="large")
 
 with upload_col, st.container(border=True):
-    st.subheader("Add training exports")
-    st.caption("Bring together multiple courses, years and learner populations.")
+    st.subheader("01 / Drop the evidence")
+    st.caption("Multiple courses. Multiple years. One uncompromised audit trail.")
     uploaded_files = st.file_uploader(
         "Drop your LMS exports here",
         type=["xlsx", "xlsm", "xls", "csv"],
@@ -103,8 +104,8 @@ with upload_col, st.container(border=True):
     )
 
 with guide_col, st.container(border=True):
-    st.subheader("One workbook. A complete audit trail.")
-    st.caption("Seven connected worksheets, ready for your review.")
+    st.subheader("02 / Know the output")
+    st.caption("Seven connected worksheets. Every number has somewhere to answer to.")
     st.markdown("""
 <div class="report-row"><span class="report-num">01</span><div><strong>Management overview</strong><p>Executive Summary, Course Reconciliation and Year Movement</p></div></div>
 <div class="report-row"><span class="report-num">02</span><div><strong>Every learner, every record</strong><p>Participant History and All Records</p></div></div>
@@ -116,7 +117,7 @@ st.divider()
 run_left, run_right = st.columns([1.2, 2.8])
 with run_left:
     run_clicked = st.button(
-        "Run full reconciliation",
+        "Run the controls →",
         type="primary",
         use_container_width=True,
         disabled=not uploaded_files,
@@ -224,7 +225,7 @@ if run_clicked:
 if st.session_state.summary:
     s = st.session_state.summary
     st.divider()
-    st.subheader("Reconciliation results")
+    st.subheader("03 / Control room")
 
     if st.session_state.validation_errors:
         st.warning("Validation needs review. Inspect the Validation and Exceptions tabs before sharing the workbook.")
@@ -298,7 +299,7 @@ if st.session_state.summary:
             st.success("Completion-state logic is internally consistent")
 
     st.divider()
-    st.subheader("Export your report")
+    st.subheader("04 / Take the evidence")
     d1, d2 = st.columns([1.2, 2.8])
     with d1:
         st.download_button(
