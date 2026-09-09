@@ -2,6 +2,11 @@
 
 This project runs locally and does not use an API, cloud service, or AI model.
 
+On managed work devices, local processing does not override browser/DLP policy.
+See [Work-device upload policies](README_GUI.md#work-device-upload-policies) for
+the browser-free workflow, loopback-only GUI controls, and the security review
+checklist.
+
 ## Output
 
 It generates `AML_Training_Full_Reconciliation.xlsx` with:

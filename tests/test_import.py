@@ -53,6 +53,27 @@ class ImportTests(unittest.TestCase):
             frame = read_file(source, {'User ID': ['Custom identifier'], 'Assignment Title': ['Custom course']})[0][1]
             self.assertEqual(frame.iloc[0]['Custom identifier'], '001')
 
+    def test_grouped_headers_disambiguate_repeated_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "Training_Progress_Report_2026.xlsx"
+            pd.DataFrame([
+                ["User Info", None, "Assignment Info", None, None, "User Progress", None, None],
+                ["ID", "Full Name", "ID", "Begin Date", "End Date", "Begin Date", "Completed Status", "Result Status"],
+                ["001", "Example Learner", "A-1", "01.01.2026", "31.12.2026", "02.01.2026", "Completed Within deadline", "Passed"],
+            ]).to_excel(source, index=False, header=False, sheet_name="Training Progress Report")
+
+            frame = read_file(source)[0][1]
+            self.assertIn("User Info::ID", frame.columns)
+            self.assertIn("Assignment Info::Begin Date", frame.columns)
+            self.assertIn("User Progress::Begin Date", frame.columns)
+
+            records, errors = process(root, root / "result.xlsx", DEFAULT_CONFIG)
+            self.assertEqual(errors, [])
+            self.assertEqual(records.loc[0, "User ID"], "001")
+            self.assertEqual(records.loc[0, "Assignment ID"], "A-1")
+            self.assertEqual(records.loc[0, "Assignment Begin"], pd.Timestamp("2026-01-01"))
+
 
 if __name__ == '__main__':
     unittest.main()

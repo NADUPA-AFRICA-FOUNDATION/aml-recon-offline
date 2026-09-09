@@ -34,27 +34,27 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "Assignment Title", "Completion Status"
     ],
     "column_aliases": {
-        "User ID": ["user id", "userid", "user_id", "employee id", "learner id", "person id"],
-        "Full Name": ["full name", "fullname", "name", "learner name", "participant name", "employee name"],
-        "Username": ["username", "email", "email address", "user email", "login", "login id"],
-        "Roles": ["roles", "role", "user roles", "job role", "learner role"],
-        "Staff Category": ["staff category", "staff type", "employee category", "person type"],
-        "Department": ["department", "dept", "business unit", "function"],
-        "Region": ["region", "area", "zone"],
-        "Territory": ["territory", "territory name"],
-        "Shop/Team": ["shop/team", "shop", "team", "branch", "location"],
-        "Learning Item ID": ["learning item id", "learning id", "item id", "course id"],
-        "Learning Title": ["learning title", "learning item", "course title", "course name", "item title"],
+        "User ID": ["user id", "userid", "user_id", "employee id", "learner id", "person id", "User Info::ID"],
+        "Full Name": ["full name", "fullname", "name", "learner name", "participant name", "employee name", "User Info::Full Name"],
+        "Username": ["username", "email", "email address", "user email", "login", "login id", "User Info::Username"],
+        "Roles": ["roles", "role", "user roles", "job role", "learner role", "User Info::Roles"],
+        "Staff Category": ["staff category", "staff type", "employee category", "person type", "User Info::Staff category"],
+        "Department": ["department", "dept", "business unit", "function", "User Info::Department"],
+        "Region": ["region", "area", "zone", "User Info::Region"],
+        "Territory": ["territory", "territory name", "User Info::Territory"],
+        "Shop/Team": ["shop/team", "shop", "team", "branch", "location", "User Info::Shop Name/Team"],
+        "Learning Item ID": ["learning item id", "learning id", "item id", "course id", "Learning Item Info::ID"],
+        "Learning Title": ["learning title", "learning item", "course title", "course name", "item title", "Learning Item Info::Title"],
         "Training Category": ["training category", "category", "learning category"],
-        "Assignment Type": ["assignment type", "type"],
-        "Assignment ID": ["assignment id", "assignment_id", "training assignment id", "enrollment id", "enrolment id"],
-        "Assignment Title": ["assignment title", "training title", "assigned learning", "assignment name"],
-        "Assignment Status": ["assignment status", "status", "enrollment status", "enrolment status"],
-        "Assignment Begin": ["assignment begin", "assignment start", "start date", "assigned date", "begin date"],
-        "Assignment End": ["assignment end", "assignment due", "end date", "due date", "deadline"],
-        "Completion Status": ["completion status", "completion_status", "learning status", "training status"],
-        "Result Status": ["result status", "result", "pass status", "outcome"],
-        "Training Hours": ["training hours", "hours", "duration hours", "learning hours"],
+        "Assignment Type": ["assignment type", "type", "Assignment Info::Type"],
+        "Assignment ID": ["assignment id", "assignment_id", "training assignment id", "enrollment id", "enrolment id", "Assignment Info::ID"],
+        "Assignment Title": ["assignment title", "training title", "assigned learning", "assignment name", "Assignment Info::Assignement title"],
+        "Assignment Status": ["assignment status", "status", "enrollment status", "enrolment status", "Assignment Info::Assignement Status"],
+        "Assignment Begin": ["assignment begin", "assignment start", "start date", "assigned date", "begin date", "Assignment Info::Begin Date"],
+        "Assignment End": ["assignment end", "assignment due", "end date", "due date", "deadline", "Assignment Info::End Date"],
+        "Completion Status": ["completion status", "completion_status", "learning status", "training status", "User Progress::Completed Status"],
+        "Result Status": ["result status", "result", "pass status", "outcome", "User Progress::Result Status"],
+        "Training Hours": ["training hours", "hours", "duration hours", "learning hours", "User Progress::Training Hours"],
         "Completion Date": ["completion date", "completed date", "date completed", "completion datetime"]
     },
     "status_rules": {
@@ -120,7 +120,7 @@ def source_files(folder: Path) -> List[Path]:
 
 
 def table_from_rows(raw: pd.DataFrame, aliases: Dict[str, Sequence[str]]) -> pd.DataFrame:
-    """Find a recognised header near the top without fuzzy column matching."""
+    """Find a flat or grouped header near the top without fuzzy matching."""
     raw = raw.dropna(how="all").reset_index(drop=True)
     if raw.empty:
         return pd.DataFrame()
@@ -139,7 +139,32 @@ def table_from_rows(raw: pd.DataFrame, aliases: Dict[str, Sequence[str]]) -> pd.
         if count >= 2:
             header = index
             break
-    columns = [clean(value) or f"Unnamed: {index}" for index, value in enumerate(raw.iloc[header])]
+    field_values = [clean(value) for value in raw.iloc[header]]
+    columns = [value or f"Unnamed: {index}" for index, value in enumerate(field_values)]
+
+    # System exports often use a merged group row immediately above a field row.
+    # A flat read turns repeated fields such as ID/Title/Begin Date into duplicate
+    # labels, so preserve their group context before assigning DataFrame columns.
+    duplicate_fields = len([value for value in field_values if value]) != len(
+        {header_key(value) for value in field_values if value}
+    )
+    if header > 0:
+        group_values = [clean(value) for value in raw.iloc[header - 1]]
+        looks_merged = 1 < sum(bool(value) for value in group_values) < sum(
+            bool(value) for value in field_values
+        )
+        groups, current = [], ""
+        for value in group_values:
+            if value:
+                current = value
+            groups.append(current)
+        if (duplicate_fields or looks_merged) and len(
+            {header_key(value) for value in groups if value}
+        ) >= 2:
+            columns = [
+                f"{groups[index]}::{field}" if groups[index] and field else field or f"Unnamed: {index}"
+                for index, field in enumerate(field_values)
+            ]
     result = raw.iloc[header + 1:].copy()
     result.columns = columns
     return result.reset_index(drop=True)
