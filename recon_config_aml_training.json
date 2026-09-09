@@ -98,8 +98,8 @@
     {
       "name": "Course Reconciliation - assignment cohorts",
       "sheet_name": "Course Reconciliation",
-      "header_row": 10,
-      "data_start_row": 11,
+      "header_row": 11,
+      "data_start_row": 12,
       "group_by": ["Assignment ID"],
       "metrics": {
         "Rows": {"col": "User ID", "agg": "count"},
@@ -114,9 +114,9 @@
     {
       "name": "Year Movement",
       "sheet_name": "Year Movement",
-      "header_row": 4,
-      "data_start_row": 5,
-      "data_end_row": 8,
+      "header_row": 5,
+      "data_start_row": 6,
+      "data_end_row": 9,
       "group_by": ["Assignment Year", "Snapshot Lifecycle", "Population"],
       "key_map": {"Assignment Year": "Assignment Year", "Snapshot Lifecycle": "Lifecycle", "Population": "Population"},
       "metrics": {

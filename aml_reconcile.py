@@ -27,6 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 DEFAULT_CONFIG: Dict[str, Any] = {
+    "report_snapshot_date": "2026-09-01",
     "internal_email_domains": ["safaricom.co.ke"],
     "internal_role_markers": ["safaricom", "employee", "staff", "internal"],
     "critical_fields": [
@@ -338,15 +339,85 @@ def metrics(g: pd.DataFrame, include_pass_rate: bool = False) -> pd.Series:
     return pd.Series(data)
 
 
-def course_summary(df: pd.DataFrame) -> pd.DataFrame:
-    result = df.groupby(["Assignment ID", "Assignment Title", "Population"], dropna=False).apply(lambda g: metrics(g, True)).reset_index()
-    ordered = ["Assignment ID", "Assignment Title", "Population", "Assignment Rows", "Unique Participants", "Completed", "Completion Rate", "Passed", "Pass Rate", "Started Not Completed", "Not Started", "Completed Late"]
-    return result[ordered]
+def course_summary(df: pd.DataFrame, active_mask: Optional[pd.Series] = None) -> pd.DataFrame:
+    """Summarise the underlying learning item, independently of its campaigns."""
+    active_mask = active_mask if active_mask is not None else pd.Series(False, index=df.index)
+    rows = []
+    for (item_id, title), group in df.groupby(["Learning Item ID", "Learning Title"], dropna=False):
+        active = active_mask.reindex(group.index, fill_value=False)
+        closed_group, active_group = group.loc[~active], group.loc[active]
+        completed = int(group["Completed Flag"].sum())
+        rows.append([
+            item_id, title, len(group), group["Participant Key"].nunique(),
+            group["Assignment ID"].replace("", np.nan).nunique(), completed,
+            completed / len(group) if len(group) else 0, len(closed_group),
+            int(closed_group["Completed Flag"].sum()),
+            closed_group["Completed Flag"].mean() if len(closed_group) else 0,
+            len(active_group), active_group["Completed Flag"].mean() if len(active_group) else 0,
+        ])
+    return pd.DataFrame(rows, columns=[
+        "Learning Item ID", "Learning Title", "Assignment Rows", "Unique Participants",
+        "Distinct Assignment Cohorts", "Completed", "Completion Rate", "Closed Rows",
+        "Closed Completed", "Closed Completion Rate", "Active Rows", "Active Completion Rate",
+    ])
 
 
-def year_summary(df: pd.DataFrame) -> pd.DataFrame:
-    result = df.groupby(["Assignment Year", "Population"], dropna=False).apply(metrics).reset_index()
-    return result[["Assignment Year", "Population", "Assignment Rows", "Unique Participants", "Completed", "Completion Rate", "Passed", "Started Not Completed", "Not Started", "Completed Late"]]
+def assignment_cohort_summary(df: pd.DataFrame, active_mask: pd.Series) -> pd.DataFrame:
+    """Produce one auditable performance row per assignment campaign/cohort."""
+    rows = []
+    keys = ["Assignment ID", "Assignment Title", "Assignment Year", "Population"]
+    for (assignment_id, title, year, population_name), group in df.groupby(keys, dropna=False):
+        active = bool(active_mask.reindex(group.index, fill_value=False).any())
+        completed = int(group["Completed Flag"].sum())
+        rows.append([
+            assignment_id, title, "Active at snapshot" if active else "Closed at snapshot",
+            join_unique(group["Assignment Status"]), year, population_name, len(group),
+            group["Participant Key"].nunique(), completed,
+            completed / len(group) if len(group) else 0, int(group["Passed Flag"].sum()),
+            int(group["Started Not Completed Flag"].sum()), int(group["Not Started Flag"].sum()),
+            int(group["Completed Late Flag"].sum()),
+        ])
+    return pd.DataFrame(rows, columns=[
+        "Assignment ID", "Assignment Title", "Lifecycle", "Assignment Status Values",
+        "Assignment Year", "Population", "Rows", "Unique Participants", "Completed",
+        "Completion Rate", "Passed", "Started Not Completed", "Not Started", "Completed Late",
+    ])
+
+
+def year_summary(df: pd.DataFrame, active_mask: Optional[pd.Series] = None) -> pd.DataFrame:
+    """Report annual results by lifecycle and population for like-for-like use."""
+    active_mask = active_mask if active_mask is not None else pd.Series(False, index=df.index)
+    working = df.copy()
+    working["Lifecycle"] = np.where(
+        active_mask.reindex(working.index, fill_value=False),
+        "Active at snapshot", "Closed at snapshot",
+    )
+    result = working.groupby(
+        ["Assignment Year", "Lifecycle", "Population"], dropna=False
+    ).apply(metrics).reset_index()
+    return result[[
+        "Assignment Year", "Lifecycle", "Population", "Assignment Rows",
+        "Unique Participants", "Completed", "Completion Rate", "Passed",
+        "Started Not Completed", "Not Started", "Completed Late",
+    ]]
+
+
+def closed_cohort_trend(df: pd.DataFrame, active_mask: pd.Series) -> pd.DataFrame:
+    """Build a year-on-year trend containing closed assignment cohorts only."""
+    rows = []
+    closed = df.loc[~active_mask.reindex(df.index, fill_value=False)]
+    previous_rate: Optional[float] = None
+    for year, group in closed.groupby("Assignment Year", dropna=False):
+        completed = int(group["Completed Flag"].sum())
+        rate = completed / len(group) if len(group) else 0
+        rows.append([
+            year, len(group), group["Participant Key"].nunique(), completed, rate,
+            "" if previous_rate is None else rate - previous_rate,
+        ])
+        previous_rate = rate
+    return pd.DataFrame(rows, columns=[
+        "Year", "Closed Rows", "Participants", "Completed", "Completion Rate", "YoY Change (pp)"
+    ])
 
 
 def join_unique(vals: Iterable[Any]) -> str:
@@ -414,10 +485,10 @@ def methodology(cfg: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Control", "Rule", "Purpose", "Treatment", "Source", "Notes"])
 
 
-def validations(all_records: pd.DataFrame, courses: pd.DataFrame, years: pd.DataFrame, hist: pd.DataFrame) -> List[str]:
+def validations(all_records: pd.DataFrame, cohorts: pd.DataFrame, years: pd.DataFrame, hist: pd.DataFrame) -> List[str]:
     errors = []
     total = len(all_records)
-    if int(courses["Assignment Rows"].sum()) != total:
+    if int(cohorts["Rows"].sum()) != total:
         errors.append("Course Reconciliation assignment rows do not equal All Records.")
     if int(years["Assignment Rows"].sum()) != total:
         errors.append("Year Movement assignment rows do not equal All Records.")
@@ -434,8 +505,49 @@ def executive_population(df: pd.DataFrame) -> pd.DataFrame:
     for p, g in df.groupby("Population", dropna=False):
         total = len(g)
         completed = int(g["Completed Flag"].sum())
-        rows.append([p, total, g["Participant Key"].nunique(), completed, completed / total if total else 0])
-    return pd.DataFrame(rows, columns=["Population", "Assignments", "Participants", "Completed", "Completion Rate"])
+        evidence = (
+            "Organisational/job-role marker" if p == "Internal staff"
+            else "No configured internal marker / unconfirmed"
+        )
+        rows.append([p, total, g["Participant Key"].nunique(), completed, completed / total if total else 0, evidence])
+    return pd.DataFrame(rows, columns=["Population", "Assignment Rows", "Participants", "Completed", "Completion Rate", "Evidence Basis"])
+
+
+def lifecycle_tables(df: pd.DataFrame, cfg: Dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
+    """Return closed-year and snapshot lifecycle views for the management sheet."""
+    snapshot = pd.to_datetime(cfg.get("report_snapshot_date"), errors="coerce")
+    if pd.isna(snapshot):
+        snapshot = pd.Timestamp.today().normalize()
+    statuses = df["Assignment Status"].fillna("").astype(str)
+    ends = pd.to_datetime(df["Assignment End"], errors="coerce")
+    explicitly_active = statuses.str.contains(r"\b(?:active|current|open)\b", case=False, regex=True)
+    explicitly_closed = statuses.str.contains(r"\b(?:archived|past|closed|expired)\b", case=False, regex=True)
+    active = explicitly_active | (~explicitly_closed & ends.ge(snapshot))
+    closed = ~active
+
+    closed_rows = []
+    for year, group in df.loc[closed].groupby("Assignment Year", dropna=False):
+        total = len(group)
+        completed = int(group["Completed Flag"].sum())
+        closed_rows.append([
+            year, total, group["Participant Key"].nunique(), completed,
+            completed / total if total else 0, int(group["Passed Flag"].sum()),
+        ])
+    years = pd.DataFrame(closed_rows, columns=[
+        "Assignment Year", "Closed Rows", "Unique Participants", "Completed", "Completion Rate", "Passed"
+    ])
+
+    lifecycle_rows = []
+    for label, mask, interpretation in (
+        ("Closed at snapshot", closed, "Eligible for performance comparison"),
+        ("Active at snapshot", active, "In-flight; do not treat non-completion as final"),
+    ):
+        group = df.loc[mask]
+        total = len(group)
+        completed = int(group["Completed Flag"].sum())
+        lifecycle_rows.append([label, total, completed, completed / total if total else 0, interpretation])
+    lifecycle = pd.DataFrame(lifecycle_rows, columns=["Lifecycle", "Rows", "Completed", "Completion Rate", "Interpretation"])
+    return years, lifecycle, active
 
 
 def format_workbook(path: Path, validation_errors: List[str]) -> None:
@@ -446,15 +558,14 @@ def format_workbook(path: Path, validation_errors: List[str]) -> None:
     white_bold = Font(color="FFFFFF", bold=True)
 
     ws = wb["Executive Summary"]
-    ws["A1"] = "AML Training Reconciliation"
+    ws["A1"] = "AML Training Reconciliation — Reaudited"
     ws["A1"].font = Font(size=18, bold=True, color="FFFFFF")
     ws["A1"].fill = dark
-    ws.merge_cells("A1:E1")
-    ws["A2"] = "All participants included; internal staff and external partners separated; legitimate repeated training participation retained."
-    ws.merge_cells("A2:E2")
+    ws.merge_cells("A1:M1")
+    ws.merge_cells("A2:M2")
     ws["A2"].alignment = Alignment(wrap_text=True)
 
-    for s in ["Course Reconciliation", "Year Movement", "Participant History", "All Records", "Exceptions", "Methodology"]:
+    for s in ["Participant History", "All Records", "Exceptions", "Methodology"]:
         sh = wb[s]
         sh.freeze_panes = "A2"
         sh.auto_filter.ref = sh.dimensions
@@ -486,18 +597,94 @@ def format_workbook(path: Path, validation_errors: List[str]) -> None:
             for c in row:
                 c.alignment = Alignment(vertical="top", wrap_text=True)
 
-    # Executive summary headers and rates.
+    course_ws = wb["Course Reconciliation"]
+    cohort_title_row = next(
+        row for row in range(1, course_ws.max_row + 1)
+        if course_ws.cell(row, 1).value == "Assignment Cohort Performance"
+    )
+    cohort_header_row = cohort_title_row + 1
+    course_ws.freeze_panes = f"A{cohort_header_row}"
+    course_ws.auto_filter.ref = f"A{cohort_header_row}:N{course_ws.max_row}"
+    for row_number in (1, 5, 6, cohort_title_row, cohort_header_row):
+        for cell in course_ws[row_number]:
+            if cell.value is not None:
+                cell.fill = dark if row_number == 1 else light
+                cell.font = white_bold if row_number == 1 else Font(bold=True)
+    for row in course_ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for row_number, end_row, header_row in (
+        (7, cohort_title_row - 1, 6),
+        (cohort_header_row + 1, course_ws.max_row, cohort_header_row),
+    ):
+        headers = {cell.value: cell.column for cell in course_ws[header_row]}
+        for heading in ("Completion Rate", "Closed Completion Rate", "Active Completion Rate"):
+            if heading in headers:
+                for current in range(row_number, end_row + 1):
+                    if isinstance(course_ws.cell(current, headers[heading]).value, (int, float)):
+                        course_ws.cell(current, headers[heading]).number_format = "0.0%"
+    for column in range(1, course_ws.max_column + 1):
+        heading = clean(course_ws.cell(cohort_header_row, column).value) or clean(course_ws.cell(6, column).value)
+        width = 42 if heading in {"Learning Title", "Assignment Title", "Assignment Status Values"} else 23
+        course_ws.column_dimensions[get_column_letter(column)].width = width
+    course_ws.row_dimensions[2].height = 34
+
+    year_ws = wb["Year Movement"]
+    trend_title_row = next(
+        row for row in range(1, year_ws.max_row + 1)
+        if year_ws.cell(row, 1).value == "Closed-Cohort Trend"
+    )
+    trend_header_row = trend_title_row + 1
+    year_ws.freeze_panes = "A5"
+    year_ws.auto_filter.ref = f"A5:K{trend_title_row - 3}"
+    for row_number in (1, 5, trend_title_row, trend_header_row):
+        for cell in year_ws[row_number]:
+            if cell.value is not None:
+                cell.fill = dark if row_number == 1 else light
+                cell.font = white_bold if row_number == 1 else Font(bold=True)
+    for row in year_ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for header_row, first_row, last_row in (
+        (5, 6, trend_title_row - 3),
+        (trend_header_row, trend_header_row + 1, year_ws.max_row),
+    ):
+        headers = {cell.value: cell.column for cell in year_ws[header_row]}
+        for heading in ("Completion Rate", "YoY Change (pp)"):
+            if heading in headers:
+                for current in range(first_row, last_row + 1):
+                    if isinstance(year_ws.cell(current, headers[heading]).value, (int, float)):
+                        year_ws.cell(current, headers[heading]).number_format = "0.0%"
+    for column in range(1, year_ws.max_column + 1):
+        year_ws.column_dimensions[get_column_letter(column)].width = 24
+    year_ws.column_dimensions["A"].width = 28
+    year_ws.row_dimensions[2].height = 34
+
+    # Executive summary section headers and rates.
     for r in range(1, ws.max_row + 1):
-        if ws.cell(r, 1).value in {"Metric", "Population"}:
+        if ws.cell(r, 1).value in {"Assignment Rows", "Closed Assignment Rows", "Assignment Year", "Population"} or r in {4, 8, 12, 13, 18, 25, 26}:
             for c in ws[r]:
                 if c.value is not None:
                     c.fill = light
                     c.font = Font(bold=True)
-    for r in range(1, ws.max_row + 1):
-        if ws.cell(r, 1).value == "Completion rate":
-            ws.cell(r, 2).number_format = "0.0%"
-        if ws.cell(r, 1).value in {"Internal staff", "External partner"}:
-            ws.cell(r, 5).number_format = "0.0%"
+    rate_columns = set()
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value and "Rate" in str(cell.value):
+                rate_columns.add((cell.row, cell.column))
+    for header_row, column in rate_columns:
+        for row_number in range(header_row + 1, ws.max_row + 1):
+            value = ws.cell(row_number, column).value
+            if isinstance(value, (float, int)):
+                ws.cell(row_number, column).number_format = "0.0%"
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for col, width in {"A": 28, "B": 24, "C": 22, "D": 22, "E": 20, "F": 24, "G": 4,
+                       "H": 23, "I": 12, "J": 14, "K": 18, "L": 48, "M": 3}.items():
+        ws.column_dimensions[col].width = width
+    ws.row_dimensions[2].height = 38
+    ws.freeze_panes = "A4"
     if validation_errors:
         ws["G1"] = "Validation issues"
         ws["G1"].fill = warning
@@ -543,42 +730,93 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
         )
 
     all_records = flag_repeats(pd.concat(frames, ignore_index=True))
-    courses = course_summary(all_records)
-    years = year_summary(all_records)
     hist = history(all_records)
     exc = exception_rows(all_records)
     meth = methodology(cfg)
-    errs = validations(all_records, courses, years, hist)
     pop = executive_population(all_records)
+    closed_years, lifecycle, active_mask = lifecycle_tables(all_records, cfg)
+    years = year_summary(all_records, active_mask)
+    trend = closed_cohort_trend(all_records, active_mask)
+    courses = course_summary(all_records, active_mask)
+    cohorts = assignment_cohort_summary(all_records, active_mask)
+    errs = validations(all_records, cohorts, years, hist)
 
     total = len(all_records)
     completed = int(all_records["Completed Flag"].sum())
-    kpis = pd.DataFrame([
-        ["Assignment rows", total],
-        ["Unique participants", all_records["Participant Key"].nunique()],
-        ["Internal staff", all_records.loc[all_records["Population"] == "Internal staff", "Participant Key"].nunique()],
-        ["External partners", all_records.loc[all_records["Population"] == "External partner", "Participant Key"].nunique()],
-        ["Completed", completed],
-        ["Completion rate", completed / total if total else 0],
-        ["Passed", int(all_records["Passed Flag"].sum())],
-        ["Started but not completed", int(all_records["Started Not Completed Flag"].sum())],
-        ["Not started", int(all_records["Not Started Flag"].sum())],
-        ["Completed late", int(all_records["Completed Late Flag"].sum())],
-        ["Exception records", len(exc)],
-        ["Validation status", "PASS" if not errs else "REVIEW REQUIRED"]
-    ], columns=["Metric", "Value"])
+    closed = all_records.loc[~active_mask]
+    active = all_records.loc[active_mask]
+    headline = pd.DataFrame([[
+        total, all_records["Participant Key"].nunique(),
+        all_records.loc[all_records["Population"] == "Internal staff", "Participant Key"].nunique(),
+        all_records.loc[all_records["Population"] != "Internal staff", "Participant Key"].nunique(),
+        completed, completed / total if total else 0,
+    ]], columns=["Assignment Rows", "Unique Participants", "Internal Staff Participants",
+                 "External / Unconfirmed", "Completed (All)", "Completion Rate (All)"])
+    closed_active = pd.DataFrame([[
+        len(closed), closed["Completed Flag"].mean() if len(closed) else 0,
+        len(active), active["Completed Flag"].mean() if len(active) else 0,
+        int(all_records["Completed Late Flag"].sum()), len(exc),
+    ]], columns=["Closed Assignment Rows", "Closed Completion Rate", "Active Assignment Rows",
+                 "Active Completion Rate", "Completed Late", "Audit-Flagged Records"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    cohort_title_row = max(10, 9 + len(courses))
+    trend_title_row = max(12, 8 + len(years))
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        kpis.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=3)
-        pop.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=3 + len(kpis) + 3)
-        courses.to_excel(writer, sheet_name="Course Reconciliation", index=False)
-        years.to_excel(writer, sheet_name="Year Movement", index=False)
+        headline.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=3)
+        closed_active.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=7)
+        closed_years.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=12, startcol=0)
+        lifecycle.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=12, startcol=7)
+        pop.to_excel(writer, sheet_name="Executive Summary", index=False, startrow=25)
+        courses.to_excel(writer, sheet_name="Course Reconciliation", index=False, startrow=5)
+        cohorts.to_excel(writer, sheet_name="Course Reconciliation", index=False, startrow=cohort_title_row)
+        years.to_excel(writer, sheet_name="Year Movement", index=False, startrow=4)
+        trend.to_excel(writer, sheet_name="Year Movement", index=False, startrow=trend_title_row)
         hist.to_excel(writer, sheet_name="Participant History", index=False)
         all_records[OUTPUT_COLUMNS].to_excel(writer, sheet_name="All Records", index=False)
         exc.to_excel(writer, sheet_name="Exceptions", index=False)
         meth.to_excel(writer, sheet_name="Methodology", index=False)
 
+    # Add the narrative after pandas has created the worksheet.
+    wb = load_workbook(output_path)
+    ws = wb["Executive Summary"]
+    snapshot_text = pd.to_datetime(cfg.get("report_snapshot_date"), errors="coerce")
+    snapshot_label = snapshot_text.strftime("%-d %b %Y") if pd.notna(snapshot_text) else "the configured"
+    ws["A2"] = (f"Management view separates closed cohorts from assignments still active at the {snapshot_label} "
+                "source snapshot. Population logic follows configured organisational and job-role evidence.")
+    ws["A12"] = "Closed Cohort Year Comparison"
+    ws["H12"] = "Snapshot Lifecycle"
+    ws["A18"] = "Audit Highlights"
+    highlights = [
+        ("Population logic", f"{len(all_records.loc[all_records['Population'] == 'Internal staff']):,} assignment rows have configured internal evidence; {len(all_records.loc[all_records['Population'] != 'Internal staff']):,} remain external/unconfirmed."),
+        ("Active-assignment distortion", f"{len(active):,} assignments were still active at the snapshot; their {active['Completed Flag'].mean() if len(active) else 0:.1%} completion rate is shown separately from closed cohorts."),
+        ("Closed-cohort performance", f"{int(closed['Completed Flag'].sum()):,} of {len(closed):,} closed assignment rows were completed ({closed['Completed Flag'].mean() if len(closed) else 0:.1%})."),
+        ("Duplicate and data-quality review", f"{len(exc):,} records are flagged for missing identifiers, unresolved identity, or potential exact repeats and remain in the detailed audit trail."),
+    ]
+    for row, (label, note) in enumerate(highlights, 19):
+        ws.cell(row, 1, label)
+        ws.cell(row, 2, note)
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=12)
+    ws["A25"] = "Population Summary"
+    course_ws = wb["Course Reconciliation"]
+    course_ws["A1"] = "Course & Cohort Reconciliation"
+    course_ws.merge_cells("A1:N1")
+    course_ws["A2"] = ("Separates the underlying learning item (course) from assignment campaigns/cohorts. "
+                       "Closed and active cohorts are reported separately.")
+    course_ws.merge_cells("A2:N2")
+    course_ws["A5"] = "Course-Level Summary"
+    course_ws.merge_cells("A5:N5")
+    course_ws.cell(cohort_title_row, 1, "Assignment Cohort Performance")
+    course_ws.merge_cells(start_row=cohort_title_row, start_column=1, end_row=cohort_title_row, end_column=14)
+    year_ws = wb["Year Movement"]
+    year_ws["A1"] = "Year Movement"
+    year_ws.merge_cells("A1:K1")
+    year_ws["A2"] = ("Like-for-like trend reporting is based on closed cohorts. Active assignments are retained "
+                     "but shown separately to avoid understating current-year performance.")
+    year_ws.merge_cells("A2:K2")
+    year_ws.cell(trend_title_row, 1, "Closed-Cohort Trend")
+    year_ws.merge_cells(start_row=trend_title_row, start_column=1, end_row=trend_title_row, end_column=11)
+    wb.save(output_path)
     format_workbook(output_path, errs)
 
     print("\nResults")
