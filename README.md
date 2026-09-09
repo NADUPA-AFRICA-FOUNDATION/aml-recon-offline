@@ -77,3 +77,49 @@ Validation: PASS
 ```
 
 If it says `REVIEW REQUIRED`, inspect the validation notes in the console and workbook.
+
+## Independently verify a workbook
+
+`recon_verifier.py` is a separate, configuration-driven audit tool. It reads the
+raw exports again and checks row counts, mapped fields and dates, derived values,
+rollup tables, and individual dashboard cells against a completed workbook. It
+does not modify either the sources or the workbook.
+
+```bash
+python recon_verifier.py --config recon_config_aml_training.json --report recon_report.md
+```
+
+The file locations can also be supplied without editing a shared config:
+
+```bash
+python recon_verifier.py --config recon_config_aml_training.json \
+  --raw-glob '/data/Training_Progress_Report_*.xlsx' \
+  --recon-path /data/AML_Training_Reconciliation.xlsx
+```
+
+Use `--data-dir /data` to relocate paths that are relative in the config file.
+Absolute paths remain absolute; `--raw-glob` and `--recon-path` always take
+precedence.
+
+Every configured check prints a `PASS` or `FAIL` line. The optional Markdown
+report includes up to 20 mismatch samples per check. Exit status `0` means all
+checks passed, `1` means at least one reconciliation check failed, and `2` means
+the files or configuration could not be read.
+
+All paths in the JSON file are resolved relative to the config file. Copy the
+included config for another reconciliation and adjust:
+
+- `raw` and `recon` for workbook locations and sheet layouts. Raw sheets can use
+  a flat header or a two-row grouped header (`Group::Field`).
+- `join` for a positional match or, preferably, stable raw/master business keys.
+- `field_map` and `date_field_map` for direct row-level comparisons.
+- `derived_checks` for `role_evidence`, `value_in_set`, `value_equals`,
+  `year_of_date`, or `duration_bucket` rules.
+- `summary_checks` for grouped or grand-total tables, and `cell_checks` for
+  dashboard cells. Supported aggregations are `count`, `nunique`, `sum`, and
+  `mean`.
+
+For stacked tables, set `data_end_row` on a summary check so rows belonging to a
+second table are not interpreted as part of the first one. Positional joins
+require source order to be preserved; key joins should be used whenever a stable
+business key exists.

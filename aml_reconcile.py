@@ -329,7 +329,8 @@ def join_unique(vals: Iterable[Any]) -> str:
     for v in vals:
         s = clean(v)
         if s and s not in seen:
-            seen.add(s); result.append(s)
+            seen.add(s)
+            result.append(s)
     return "; ".join(result)
 
 
@@ -406,7 +407,8 @@ def validations(all_records: pd.DataFrame, courses: pd.DataFrame, years: pd.Data
 def executive_population(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for p, g in df.groupby("Population", dropna=False):
-        total = len(g); completed = int(g["Completed Flag"].sum())
+        total = len(g)
+        completed = int(g["Completed Flag"].sum())
         rows.append([p, total, g["Participant Key"].nunique(), completed, completed / total if total else 0])
     return pd.DataFrame(rows, columns=["Population", "Assignments", "Participants", "Completed", "Completion Rate"])
 
@@ -432,7 +434,9 @@ def format_workbook(path: Path, validation_errors: List[str]) -> None:
         sh.freeze_panes = "A2"
         sh.auto_filter.ref = sh.dimensions
         for c in sh[1]:
-            c.fill = dark; c.font = white_bold; c.alignment = Alignment(wrap_text=True, vertical="center")
+            c.fill = dark
+            c.font = white_bold
+            c.alignment = Alignment(wrap_text=True, vertical="center")
         if sh.max_row >= 2:
             try:
                 table = Table(displayName=re.sub(r"[^A-Za-z0-9]", "", s)[:20] + "Tbl", ref=f"A1:{get_column_letter(sh.max_column)}{sh.max_row}")
@@ -443,28 +447,38 @@ def format_workbook(path: Path, validation_errors: List[str]) -> None:
         headers = {c.value: c.column for c in sh[1]}
         for h in ("Completion Rate", "Pass Rate"):
             if h in headers:
-                for r in range(2, sh.max_row + 1): sh.cell(r, headers[h]).number_format = "0.0%"
+                for r in range(2, sh.max_row + 1):
+                    sh.cell(r, headers[h]).number_format = "0.0%"
         for h in ("Assignment Begin", "Assignment End", "First Activity", "Latest Activity"):
             if h in headers:
-                for r in range(2, sh.max_row + 1): sh.cell(r, headers[h]).number_format = "yyyy-mm-dd"
+                for r in range(2, sh.max_row + 1):
+                    sh.cell(r, headers[h]).number_format = "yyyy-mm-dd"
         for col in range(1, sh.max_column + 1):
             h = clean(sh.cell(1, col).value)
             width = 38 if h in {"Source File", "Missing Critical Fields", "Exact Repeat Review", "Rule", "Purpose", "Treatment", "Notes"} else 30 if h in {"Full Name", "Assignment Title", "Learning Title", "Username", "Participant Key"} else min(max(len(h)+3, 12), 22)
             sh.column_dimensions[get_column_letter(col)].width = width
         for row in sh.iter_rows():
-            for c in row: c.alignment = Alignment(vertical="top", wrap_text=True)
+            for c in row:
+                c.alignment = Alignment(vertical="top", wrap_text=True)
 
     # Executive summary headers and rates.
     for r in range(1, ws.max_row + 1):
         if ws.cell(r, 1).value in {"Metric", "Population"}:
             for c in ws[r]:
-                if c.value is not None: c.fill = light; c.font = Font(bold=True)
+                if c.value is not None:
+                    c.fill = light
+                    c.font = Font(bold=True)
     for r in range(1, ws.max_row + 1):
-        if ws.cell(r, 1).value == "Completion rate": ws.cell(r, 2).number_format = "0.0%"
-        if ws.cell(r, 1).value in {"Internal staff", "External partner"}: ws.cell(r, 5).number_format = "0.0%"
+        if ws.cell(r, 1).value == "Completion rate":
+            ws.cell(r, 2).number_format = "0.0%"
+        if ws.cell(r, 1).value in {"Internal staff", "External partner"}:
+            ws.cell(r, 5).number_format = "0.0%"
     if validation_errors:
-        ws["G1"] = "Validation issues"; ws["G1"].fill = warning; ws["G1"].font = Font(bold=True)
-        for i, err in enumerate(validation_errors, 2): ws.cell(i, 7, err)
+        ws["G1"] = "Validation issues"
+        ws["G1"].fill = warning
+        ws["G1"].font = Font(bold=True)
+        for i, err in enumerate(validation_errors, 2):
+            ws.cell(i, 7, err)
         ws.column_dimensions["G"].width = 60
 
     wb.save(path)
@@ -488,7 +502,9 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
             meaningful = n[["User ID", "Username", "Full Name", "Assignment ID", "Assignment Title", "Completion Status"]].fillna("").astype(str).apply(lambda c: c.str.strip()).ne("").any(axis=1)
             n = n.loc[meaningful].copy()
             if not n.empty:
-                frames.append(n); offset += len(n); file_count += len(n)
+                frames.append(n)
+                offset += len(n)
+                file_count += len(n)
         print(f"  {path.name}: {file_count:,} records")
 
     if not frames:
@@ -510,7 +526,8 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
     errs = validations(all_records, courses, years, hist)
     pop = executive_population(all_records)
 
-    total = len(all_records); completed = int(all_records["Completed Flag"].sum())
+    total = len(all_records)
+    completed = int(all_records["Completed Flag"].sum())
     kpis = pd.DataFrame([
         ["Assignment rows", total],
         ["Unique participants", all_records["Participant Key"].nunique()],
@@ -548,7 +565,8 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
     print(f"  Output:              {output_path.resolve()}")
     print("  Validation:          " + ("PASS" if not errs else "REVIEW REQUIRED"))
     if errs:
-        for e in errs: print("    - " + e)
+        for e in errs:
+            print("    - " + e)
     return all_records, errs
 
 
