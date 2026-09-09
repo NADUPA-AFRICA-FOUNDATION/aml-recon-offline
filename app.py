@@ -87,18 +87,21 @@ with upload_col, st.container(key="upload-card"):
     )
     st.caption("XLSX, XLSM, XLS or CSV. Report titles above column headings are supported.")
 
-    with st.expander("Classification rules", expanded=bool(parse_domains(st.session_state.get("internal_domains", ""))[1])):
+    with st.container(key="classification-rules"):
+        st.subheader("Classification rules")
         st.caption("A matching email domain or role marks a learner as internal. Other learners are classified as external partners.")
         internal_domains_raw = st.text_area(
             "Internal email domains", key="internal_domains",
-            value="\n".join(DEFAULT_CONFIG["internal_email_domains"]), height=88,
+            value="\n".join(DEFAULT_CONFIG["internal_email_domains"]), height=104,
             help="Enter domains such as safaricom.co.ke, separated by new lines, commas or semicolons. Do not enter full email addresses or URLs.",
         )
+        st.caption("Email domains only, for example safaricom.co.ke. Separate entries with new lines or commas.")
         internal_markers_raw = st.text_area(
             "Internal role markers", key="internal_markers",
-            value="\n".join(DEFAULT_CONFIG["internal_role_markers"]), height=120,
+            value="\n".join(DEFAULT_CONFIG["internal_role_markers"]), height=144,
             help="One marker per line. A match anywhere in Roles or Staff Category classifies the learner as internal.",
         )
+        st.caption("Role keywords only, one per line, for example employee or staff.")
         domains, domain_errors = parse_domains(internal_domains_raw)
         markers = parse_markers(internal_markers_raw)
         if domain_errors:

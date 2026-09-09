@@ -138,3 +138,28 @@ hr { border-color: var(--color-divider); margin: var(--space-6) 0; }
   .workflow { margin-bottom: var(--space-6); }
   .st-key-report-card { box-shadow: none; background: transparent; padding: var(--space-4); }
 }
+
+/* Keep editable classification fields visibly distinct from explanatory copy. */
+.st-key-classification-rules {
+  background: var(--color-surface);
+  border-radius: var(--radius-input);
+  padding: var(--space-5);
+  gap: var(--space-4);
+}
+.st-key-classification-rules [data-testid="stTextArea"] label {
+  color: var(--color-foreground);
+  font-weight: 700;
+}
+.st-key-classification-rules [data-testid="stTextArea"] textarea {
+  background: var(--color-surface-white);
+  color: var(--color-foreground);
+  border: 2px solid var(--color-control-line);
+  border-radius: var(--radius-input);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: none;
+}
+.st-key-classification-rules [data-baseweb="textarea"] {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
