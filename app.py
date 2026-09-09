@@ -9,18 +9,22 @@ import pandas as pd
 import streamlit as st
 
 from aml_reconcile import DEFAULT_CONFIG, process
+import studio_ui as ui
 
 APP_TITLE = "AML Training Reconciliation Studio"
 
 st.set_page_config(
     page_title=APP_TITLE,
-    page_icon="🛡️",
+    page_icon=":material/verified_user:",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 st.markdown(
-    "<style>" + (Path(__file__).parent / "assets" / "studio.css").read_text() + "</style>",
+    "<style>" + "\n".join(
+        (Path(__file__).parent / "assets" / name).read_text()
+        for name in ("tokens.css", "studio.css")
+    ) + "</style>",
     unsafe_allow_html=True,
 )
 
@@ -33,6 +37,7 @@ def init_state() -> None:
         "exceptions_df": None,
         "validation_errors": None,
         "result_signature": None,
+        "export_requested": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -41,26 +46,12 @@ def init_state() -> None:
 
 init_state()
 
-workflow = st.empty()
-workflow.markdown(
-    """
-<div class="hero">
-  <div><div class="eyebrow">Compliance workspace / AML &amp; CFT</div>
-  <h1>Reconcile.<br>Prove it.</h1>
-  <p>Drop the exports. Challenge every row. Leave with one loud, traceable source of truth.</p></div>
-  <div class="local-badge">● 100% local</div>
-</div>
-<div class="ticker" aria-hidden="true"><span>RAW FILES ✦ CONTROL TOTALS ✦ EXCEPTIONS ✦ AUDIT TRAIL ✦ NO CLOUD ✦ RAW FILES ✦ CONTROL TOTALS ✦ EXCEPTIONS ✦ AUDIT TRAIL ✦ NO CLOUD ✦&nbsp;</span></div>
-<div class="workflow" aria-label="Reconciliation workflow">
-  <div class="step"><b>01</b> Add exports</div>
-  <div class="step"><b>02</b> Review results</div>
-  <div class="step"><b>03</b> Export workbook</div>
-</div>
-""", unsafe_allow_html=True,
-)
+st.markdown(ui.header(), unsafe_allow_html=True)
+workflow_slot = st.empty()
+workflow_slot.markdown(ui.workflow("upload"), unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown('<div class="brand"><span class="brand-mark">AML</span><div>Reconcile Studio<small>TRAINING OPERATIONS</small></div></div>', unsafe_allow_html=True)
+    st.markdown(ui.brand(), unsafe_allow_html=True)
     st.subheader("Classification rules")
     st.caption("Set how learners are grouped in your report.")
 
@@ -89,45 +80,26 @@ with st.sidebar:
 
 upload_col, guide_col = st.columns([1.55, 1], gap="large")
 
-with upload_col, st.container(border=True):
-    st.subheader("01 / Drop the evidence")
-    st.caption("Multiple courses. Multiple years. One uncompromised audit trail.")
+with upload_col, st.container(key="upload-card"):
+    st.subheader("Add training exports")
+    st.caption("Bring together multiple courses, years and learner populations.")
     uploaded_files = st.file_uploader(
         "Drop your LMS exports here",
         type=["xlsx", "xlsm", "xls", "csv"],
         accept_multiple_files=True,
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     st.markdown(
         '<div class="small-note">Supported: XLSX, XLSM, XLS and CSV. You can add multiple years, courses and populations in one run.</div>',
         unsafe_allow_html=True,
     )
 
-with guide_col, st.container(border=True):
-    st.subheader("02 / Know the output")
-    st.caption("Seven connected worksheets. Every number has somewhere to answer to.")
-    st.markdown("""
-<div class="report-row"><span class="report-num">01</span><div><strong>Management overview</strong><p>Executive Summary, Course Reconciliation and Year Movement</p></div></div>
-<div class="report-row"><span class="report-num">02</span><div><strong>Every learner, every record</strong><p>Participant History and All Records</p></div></div>
-<div class="report-row"><span class="report-num">03</span><div><strong>Controls you can inspect</strong><p>Exceptions and Methodology</p></div></div>
-""", unsafe_allow_html=True)
+with guide_col, st.container(key="report-card"):
+    st.subheader("From exports to evidence")
+    st.caption("Seven connected worksheets, ready for your review.")
+    st.markdown(ui.report_guide(), unsafe_allow_html=True)
 
 st.divider()
-
-run_left, run_right = st.columns([1.2, 2.8])
-with run_left:
-    run_clicked = st.button(
-        "Run the controls →",
-        type="primary",
-        use_container_width=True,
-        disabled=not uploaded_files,
-    )
-with run_right:
-    if uploaded_files:
-        total_size = sum(getattr(f, "size", 0) for f in uploaded_files)
-        st.info(f"Ready: **{len(uploaded_files)} file(s)** • {total_size / (1024*1024):.1f} MB")
-    else:
-        st.info("Add at least one training export to enable the reconciliation engine.")
 
 current_signature = (
     tuple((file.name, hashlib.sha256(file.getbuffer()).hexdigest()) for file in (uploaded_files or [])),
@@ -136,19 +108,38 @@ current_signature = (
 )
 
 if st.session_state.summary and st.session_state.result_signature != current_signature:
+    st.session_state.export_requested = False
     st.session_state.result_bytes = None
     st.session_state.summary = None
     st.session_state.exceptions_df = None
     st.session_state.validation_errors = None
-    st.info("Inputs or classification rules changed. Run reconciliation again to refresh your results.")
+    st.info("Inputs or classification rules changed. Run reconciliation again to refresh your results.", icon=":material/info:")
+
+
+run_left, run_right = st.columns([1.2, 2.8])
+with run_left:
+    run_clicked = st.button(
+        "Run full reconciliation",
+        type="secondary" if st.session_state.summary else "primary",
+        use_container_width=True,
+        disabled=not uploaded_files,
+    )
+with run_right:
+    if uploaded_files:
+        total_size = sum(getattr(f, "size", 0) for f in uploaded_files)
+        st.info(f"Ready: **{len(uploaded_files)} file(s)** • {total_size / (1024*1024):.1f} MB", icon=":material/info:")
+    else:
+        st.info("Add at least one training export to enable the reconciliation engine.", icon=":material/info:")
+
 
 if run_clicked:
+    st.session_state.export_requested = False
     st.session_state.result_bytes = None
     st.session_state.summary = None
     st.session_state.exceptions_df = None
     st.session_state.validation_errors = None
 
-    status = st.status("Preparing local reconciliation…", expanded=True)
+    status = st.status("Reconciling your training records…", expanded=True)
     try:
         with tempfile.TemporaryDirectory(prefix="aml_recon_") as tmp:
             tmpdir = Path(tmp)
@@ -157,7 +148,7 @@ if run_clicked:
             input_dir.mkdir()
             output_dir.mkdir()
 
-            status.write("Saving uploaded exports to a temporary local workspace…")
+            status.write("Preparing your uploaded exports…")
             for index, file in enumerate(uploaded_files):
                 dest = input_dir / f"{index + 1:03d}_{Path(file.name).name}"
                 dest.write_bytes(file.getbuffer())
@@ -218,27 +209,32 @@ if run_clicked:
             else:
                 status.update(label="Reconciliation completed successfully", state="complete", expanded=False)
 
+        st.rerun()
+
     except Exception as exc:
         status.update(label="Reconciliation could not be completed", state="error", expanded=True)
-        st.error(str(exc))
+        st.error(str(exc), icon=":material/error:")
 
 if st.session_state.summary:
     s = st.session_state.summary
+    workflow_slot.markdown(ui.workflow("export" if st.session_state.export_requested else "review"), unsafe_allow_html=True)
     st.divider()
-    st.subheader("03 / Control room")
+    st.subheader("Reconciliation results")
 
     if st.session_state.validation_errors:
-        st.warning("Validation needs review. Inspect the Validation and Exceptions tabs before sharing the workbook.")
+        st.warning("Validation needs review. Inspect the Validation and Exceptions tabs before sharing the workbook.", icon=":material/warning:")
     else:
-        st.success("Validation passed — control totals reconcile across the workbook.")
+        st.success("Validation passed — control totals reconcile across the workbook.", icon=":material/check_circle:")
 
-    st.write("")
+    st.markdown(ui.result_summary(s, bool(st.session_state.validation_errors or s["exceptions"])), unsafe_allow_html=True)
+    if s["exceptions"] and not st.session_state.validation_errors:
+        st.warning(f"{s['exceptions']:,} exception records need your review. Passing control totals does not resolve these items.", icon=":material/warning:")
     metric_cols = st.columns(3)
     metrics = [
         ("Assignment rows", f"{s['assignments']:,}"),
         ("Unique participants", f"{s['participants']:,}"),
         ("Completed", f"{s['completed']:,}"),
-        ("Completion rate", f"{s['completion_rate']:.1%}"),
+        ("Source files", f"{len(uploaded_files):,}"),
         ("Passed", f"{s['passed']:,}"),
         ("Exceptions", f"{s['exceptions']:,}"),
     ]
@@ -268,7 +264,7 @@ if st.session_state.summary:
     with tab_exceptions:
         exc_df = st.session_state.exceptions_df
         if exc_df is None or exc_df.empty:
-            st.success("No reconciliation exceptions were detected under the configured rules.")
+            st.success("No reconciliation exceptions were detected under the configured rules.", icon=":material/check_circle:")
         else:
             display_cols = [
                 "Source File", "Participant Key", "Full Name", "Username",
@@ -290,31 +286,33 @@ if st.session_state.summary:
     with tab_validation:
         if st.session_state.validation_errors:
             for item in st.session_state.validation_errors:
-                st.warning(item)
+                st.warning(item, icon=":material/warning:")
         else:
-            st.success("Course totals = All Records totals")
-            st.success("Year totals = All Records totals")
-            st.success("Population totals = All Records totals")
-            st.success("Participant History = unique Participant Keys")
-            st.success("Completion-state logic is internally consistent")
+            st.success("Course totals = All Records totals", icon=":material/check_circle:")
+            st.success("Year totals = All Records totals", icon=":material/check_circle:")
+            st.success("Population totals = All Records totals", icon=":material/check_circle:")
+            st.success("Participant History = unique Participant Keys", icon=":material/check_circle:")
+            st.success("Completion-state logic is internally consistent", icon=":material/check_circle:")
 
     st.divider()
-    st.subheader("04 / Take the evidence")
-    d1, d2 = st.columns([1.2, 2.8])
-    with d1:
-        st.download_button(
-            "Download reconciled workbook",
-            data=st.session_state.result_bytes,
-            file_name=st.session_state.result_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True,
-        )
-    with d2:
-        st.success("The output contains the full seven-sheet AML training reconciliation and audit trail.")
+    with st.container(key="export-card"):
+        st.subheader("Export your report")
+        d1, d2 = st.columns([1.2, 2.8])
+        with d1:
+            st.download_button(
+                "Download reconciled workbook",
+                data=st.session_state.result_bytes,
+                file_name=st.session_state.result_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True,
+                on_click=lambda: st.session_state.update(export_requested=True),
+            )
+        with d2:
+            st.success("The output contains the full seven-sheet AML training reconciliation and audit trail.", icon=":material/check_circle:")
 
 else:
-    st.markdown('<div class="empty-state"><h3>Your results will appear here</h3><p>Add your exports, check the classification rules, then run reconciliation to see your training overview.</p></div>', unsafe_allow_html=True)
+    st.markdown(ui.empty_state(), unsafe_allow_html=True)
 
 st.divider()
 with st.expander("Methodology & matching controls"):
@@ -335,4 +333,6 @@ No generative AI is required during processing, which means the same source file
 """
     )
 
-st.markdown('<div class="footer-note">AML Reconcile Studio · Processed locally · Source records preserved · No cloud upload</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer-note">Reconcile Studio · Source records preserved · Rule-based matching</div>', unsafe_allow_html=True)
+
+st.caption("Processing happens on the computer or server running this app. Temporary upload files are deleted after each run.")

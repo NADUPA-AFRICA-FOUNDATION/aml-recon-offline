@@ -159,9 +159,10 @@ with:
 
 ## Interface improvements
 
-- A high-contrast neo-brutalist workspace with a staged workflow and grouped workbook contents.
-- Centralized cream, red, yellow, violet, black-border and hard-shadow design tokens.
-- Mechanical button states, tactile cards, bold metric blocks, and an energetic audit-trail ticker.
+- A green soft-depth workspace with a staged workflow and grouped workbook contents.
+- Centralized colours, typography, spacing, rounding, shadows, motion and focus tokens.
+- Raised cards, recessed inputs, a prominent completion summary and accessible green actions.
+- Reusable presentation components documented in `DESIGN_SYSTEM.md`.
 - Strong keyboard focus indicators, horizontal tab overflow, reduced-motion support, and responsive single-column layouts.
 - Searchable exceptions and clear empty, success and error states.
 - Results are cleared when exports or classification rules change, preventing stale downloads.
