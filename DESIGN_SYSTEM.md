@@ -9,14 +9,16 @@ claims are used.
 - `assets/tokens.css`: semantic colours, type, spacing, radii, elevation, focus,
   motion and breakpoint reference values.
 - `assets/studio.css`: native Streamlit widget styling and layout rules.
+- `assets/high-contrast.css`: shared system/session increased-contrast treatment.
+- `studio_inputs.py`: domain validation and exception filtering.
 - `studio_ui.py`: display-only brand, header, workflow, report guide, completion
   summary and empty-state components. Dynamic HTML text is escaped.
 - `.streamlit/config.toml`: native widget theme. Its primary/background/text
   values mirror the tokens because Streamlit cannot consume CSS variables here.
 - `app.py`: native interactive controls and the existing reconciliation flow.
 
-Do not add remote fonts or icon dependencies: Inter is preferred when installed,
-with Streamlit's existing Source Sans and system fonts as fallbacks. SVG icons
+Do not add remote fonts or icon dependencies: the interface uses the device's
+system font stack. SVG icons
 are original, decorative and hidden from assistive technology.
 
 ## Material and hierarchy
@@ -37,7 +39,8 @@ borders when needed for control identification and forced-colour modes.
 
 ## Responsive and motion rules
 
-Start with single-column composition. At 48rem, introduce horizontal header and
+Keep upload, classification rules and the run action together; supporting report
+content follows. Start with single-column composition. At 48rem, introduce horizontal header and
 workflow arrangements; at 64rem, increase card padding. Below 48rem, native
 Streamlit columns stack and result tabs scroll horizontally. Sidebar visibility
 uses Streamlit's automatic viewport behaviour. Breakpoint literals in media
@@ -61,3 +64,11 @@ A connected browser was unavailable during implementation: visual QA at 375px,
 768px and desktop widths, keyboard traversal, zoom, and screen-reader checks
 remain required before asserting complete WCAG conformance. Streamlit upgrades
 may change the native `data-testid` selectors used by the stylesheet.
+
+
+## Apple HIG audit refinement
+
+See `docs/UI_UX_AUDIT.md` for the findings, guideline references, implemented fixes
+and checks still requiring a browser. Shadows are deliberately quieter after
+this audit. Preserve clear action hierarchy, inline domain validation, reversible
+exception filters and the readable record-detail view in future changes.

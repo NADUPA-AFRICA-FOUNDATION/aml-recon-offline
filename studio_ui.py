@@ -28,10 +28,10 @@ def brand() -> str:
 
 def header() -> str:
     return f'''<a class="skip-link" href="#workspace">Skip to workspace</a>
-<div class="hero" id="workspace" tabindex="-1">
+<div class="hero">
 <div><div class="eyebrow">Clarity in every record</div>
-<h1>Training reconciled.<br>Confidence restored.</h1>
-<p>Bring your AML training records together. See who completed, find what needs attention and share a traceable report.</p></div>
+<h1>Training reconciliation</h1>
+<p>Combine your exports, review completion and resolve exceptions.</p></div>
 <div class="trust-note"><span class="icon-well">{icon("shield")}</span>
 <div><strong>Your records, preserved.</strong>Clear matching rules.<br>Every exception visible.</div></div>
 </div>'''
@@ -75,5 +75,5 @@ def result_summary(summary: dict, needs_review: bool) -> str:
 
 def empty_state() -> str:
     return (f'<div class="empty-state"><span class="icon-well">{icon("upload")}</span>'
-            '<h3>Your results will appear here</h3><p>Add your exports, check the classification rules, '
+            '<h2>Your results will appear here</h2><p>Add your exports, check the classification rules, '
             'then run reconciliation to see your training overview.</p></div>')

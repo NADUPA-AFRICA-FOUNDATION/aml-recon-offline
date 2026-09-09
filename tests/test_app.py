@@ -32,7 +32,7 @@ class StudioTests(unittest.TestCase):
         app = AppTest.from_file(str(ROOT / "app.py")).run()
         self.assertFalse(app.exception)
         self.assertTrue(app.button[0].disabled)
-        self.assertTrue(any("Training reconciled." in item.value and "Confidence restored." in item.value for item in app.markdown))
+        self.assertTrue(any("<h1>Training reconciliation</h1>" in item.value for item in app.markdown))
         self.assertTrue(any("Your results will appear here" in item.value for item in app.markdown))
 
     def test_reconcile_export_and_invalidate_changed_rules(self):
@@ -48,7 +48,7 @@ class StudioTests(unittest.TestCase):
             self.assertEqual(len(workbook.sheet_names), 7)
             self.assertEqual(len(pd.read_excel(workbook, "All Records")), 2)
             self.assertEqual(app.session_state.validation_errors, [])
-            app.sidebar.text_area[0].set_value("example.org").run()
+            app.text_area(key="internal_domains").set_value("example.org").run()
             self.assertIsNone(app.session_state.result_bytes)
             self.assertIsNone(app.session_state.summary)
 
@@ -66,6 +66,35 @@ class StudioTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertTrue(app.error)
             self.assertIsNone(app.session_state.result_bytes)
+
+    def test_invalid_domains_block_run_and_recover(self):
+        with patch("streamlit.file_uploader", return_value=[export()]):
+            app = AppTest.from_file(str(ROOT / "app.py")).run()
+            app.text_area(key="internal_domains").set_value("https://example.org").run()
+            self.assertFalse(app.exception)
+            self.assertTrue(app.button[0].disabled)
+            self.assertTrue(any("Some domains are invalid" in item.value for item in app.error))
+            app.text_area(key="internal_domains").set_value("@safaricom.co.ke; partner.org").run()
+            self.assertFalse(app.button[0].disabled)
+            app.button[0].click().run(timeout=30)
+            self.assertEqual(app.session_state.summary["internal"], 1)
+            original = app.session_state.result_bytes
+            app.toggle(key="increased_contrast").set_value(True).run()
+            self.assertEqual(app.session_state.result_bytes, original)
+            self.assertFalse(app.exception)
+
+    def test_filter_recovery_and_text_details_preserve_workbook(self):
+        with patch("streamlit.file_uploader", return_value=[export(missing_name=True)]):
+            app = AppTest.from_file(str(ROOT / "app.py")).run()
+            app.button[0].click().run(timeout=30)
+            original = app.session_state.result_bytes
+            app.selectbox(key="exception_issue").select("Possible repeats").run()
+            self.assertTrue(any("No exceptions match" in item.value for item in app.info))
+            next(button for button in app.button if button.label == "Clear filters").click().run()
+            self.assertEqual(app.selectbox(key="exception_issue").value, "All exceptions")
+            self.assertTrue(any("Not provided" == item.value for item in app.text))
+            self.assertEqual(app.session_state.result_bytes, original)
+            self.assertFalse(app.exception)
 
 
 if __name__ == "__main__":

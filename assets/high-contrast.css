@@ -1,0 +1,23 @@
+/* Shared by the system preference and the explicit session preference. */
+:root {
+  --color-surface: #F8FAF9;
+  --color-surface-white: #FFFFFF;
+  --color-foreground: #10291F;
+  --color-muted: #344E41;
+  --color-control-line: #344E41;
+  --color-divider: #738C7E;
+  --shadow-raised: none;
+  --shadow-raised-hover: none;
+  --shadow-small: none;
+  --shadow-inset: none;
+  --shadow-inset-deep: none;
+  --shadow-brand: none;
+}
+.st-key-upload-card, .st-key-report-card, .st-key-export-card,
+.workflow, .empty-state, [data-testid="stMetric"] {
+  border: 1px solid var(--color-control-line);
+}
+.step.active, [data-baseweb="tab"][aria-selected="true"] {
+  outline: 2px solid var(--color-brand-dark);
+  outline-offset: -2px;
+}

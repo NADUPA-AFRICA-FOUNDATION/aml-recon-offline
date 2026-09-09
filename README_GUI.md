@@ -72,7 +72,7 @@ This is a local address. Your uploaded files are processed on the computer runni
 
 1. Launch the app.
 2. Drag all AML training Excel/CSV exports into the upload area.
-3. Review the internal email-domain and role-marker settings.
+3. Open **Classification rules** below the upload area and review the email domains and role markers.
 4. Click **Run full reconciliation**.
 5. Review KPIs, population split, exceptions, and validation.
 6. Click **Download reconciled workbook**.
@@ -188,3 +188,16 @@ Check these against the expected names (such as User ID, Email, Full Name,
 Assignment Title and Completion Status). Custom headings can be mapped through
 `column_aliases` in a CLI configuration file; for the GUI, extend
 `DEFAULT_CONFIG["column_aliases"]` in `aml_reconcile.py`.
+
+
+## Workspace usability
+
+Classification rules and the run action are grouped with file uploads. Invalid
+email-domain settings explain what to correct before a run. In **Exceptions**,
+combine text search with **Issue type**, use **Clear filters** to reset, or open
+**Read individual exception details** for a labelled text view. These filters do
+not change the downloaded workbook.
+
+**Increase contrast** is available in the sidebar and also follows the browser's
+system increased-contrast preference. The [UI/UX audit](docs/UI_UX_AUDIT.md)
+records implemented improvements and the remaining visual verification work.

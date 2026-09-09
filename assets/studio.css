@@ -21,7 +21,7 @@ h3 { font-size: var(--font-h3) !important; }
 .hero { padding: var(--space-4) 0 var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
 .eyebrow { display: flex; align-items: center; gap: var(--space-2); color: var(--color-brand-dark); font-size: var(--font-caption); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .eyebrow::before { content: ""; width: var(--space-2); height: var(--space-2); background: var(--color-brand); border-radius: var(--radius-pill); }
-.hero h1 { font-size: var(--font-h1); font-weight: 800; margin: 0; padding: var(--space-3) 0; max-width: 18ch; }
+.hero h1 { font-size: var(--font-h1); font-weight: 800; margin: 0; padding: var(--space-3) 0; max-width: none; }
 .hero p { max-width: 58ch; color: var(--color-muted); font-size: var(--font-large); margin: 0; }
 .trust-note { display: flex; align-items: center; gap: var(--space-3); color: var(--color-muted); font-size: var(--font-small); }
 .trust-note strong { color: var(--color-foreground); display: block; font-weight: 700; }
@@ -77,7 +77,7 @@ input::placeholder, textarea::placeholder { color: var(--color-muted) !important
 [data-testid="stDataFrame"] { border-radius: var(--radius-input); overflow: hidden; background: var(--color-surface-white); }
 [data-testid="stExpander"] { border-radius: var(--radius-input); background: var(--color-surface-white); box-shadow: var(--shadow-small); }
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: var(--space-4); border-radius: var(--radius-card); padding: var(--space-10) var(--space-6); margin: var(--space-6) 0; box-shadow: var(--shadow-inset); text-align: center; }
-.empty-state h3 { margin: 0; padding: 0; }
+.empty-state h2 { margin: 0; padding: 0; }
 .empty-state p { color: var(--color-muted); max-width: 54ch; font-size: var(--font-body); margin: 0; }
 .footer-note { padding: var(--space-6) 0; line-height: var(--leading-body); }
 hr { border-color: var(--color-divider); margin: var(--space-6) 0; }
@@ -112,3 +112,29 @@ hr { border-color: var(--color-divider); margin: var(--space-6) 0; }
 [data-testid="stAlertContainer"]:has([data-testid="stAlertContentWarning"]) { background: var(--color-warning-surface); color: var(--color-warning-ink); }
 [data-testid="stAlertContainer"]:has([data-testid="stAlertContentError"]) { background: var(--color-error-surface); color: var(--color-error); }
 [data-testid="stAlertContainer"]:has([data-testid="stAlertContentInfo"]) { background: var(--color-info-surface); color: var(--color-info-ink); }
+
+/* HIG audit refinements: safe areas, text reflow and scoped control surfaces. */
+.block-container {
+  padding-left: max(var(--space-4), env(safe-area-inset-left));
+  padding-right: max(var(--space-4), env(safe-area-inset-right));
+  padding-bottom: max(var(--space-12), env(safe-area-inset-bottom));
+}
+.hero { padding-bottom: var(--space-6); }
+.hero > div { min-width: 0; }
+.hero h1 { overflow-wrap: anywhere; }
+.hero p { font-size: var(--font-body); }
+.st-key-upload-card h2, .st-key-report-card h2, .st-key-export-card h2 { font-size: var(--font-h3) !important; }
+.st-key-upload-card [data-testid="stExpander"] { box-shadow: none; border: 1px solid var(--color-divider); }
+[data-baseweb="select"] > div { min-height: var(--control-height); border-radius: var(--radius-input); color: var(--color-foreground); background: var(--color-surface-white); border-color: var(--color-control-line); }
+[data-testid="stMetricLabel"] p, [data-testid="stMetricValue"] > div { white-space: normal; overflow-wrap: anywhere; }
+.step { min-width: 0; }
+.step span { overflow-wrap: anywhere; }
+#workspace { scroll-margin-top: var(--space-12); }
+@media (min-width: 48rem) {
+  .block-container { padding-left: max(var(--space-8), env(safe-area-inset-left)); padding-right: max(var(--space-8), env(safe-area-inset-right)); }
+}
+@media (max-width: 47.99rem) {
+  .hero .trust-note { display: none; }
+  .workflow { margin-bottom: var(--space-6); }
+  .st-key-report-card { box-shadow: none; background: transparent; padding: var(--space-4); }
+}
