@@ -9,18 +9,25 @@ import pandas as pd
 import streamlit as st
 
 from aml_reconcile import DEFAULT_CONFIG, process
+import studio_ui as ui
+from studio_inputs import ISSUE_TYPES, filter_exceptions, parse_domains, parse_markers
 
 APP_TITLE = "AML Training Reconciliation Studio"
 
 st.set_page_config(
     page_title=APP_TITLE,
-    page_icon="🛡️",
+    page_icon=":material/verified_user:",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 st.markdown(
-    "<style>" + (Path(__file__).parent / "assets" / "studio.css").read_text() + "</style>",
+    "<style>" + "\n".join(
+        (Path(__file__).parent / "assets" / name).read_text()
+        for name in ("tokens.css", "studio.css")
+    ) + "\n@media (prefers-contrast: more) {"
+    + (Path(__file__).parent / "assets" / "high-contrast.css").read_text()
+    + "}\n</style>",
     unsafe_allow_html=True,
 )
 
@@ -33,6 +40,7 @@ def init_state() -> None:
         "exceptions_df": None,
         "validation_errors": None,
         "result_signature": None,
+        "export_requested": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -41,114 +49,114 @@ def init_state() -> None:
 
 init_state()
 
-workflow = st.empty()
-workflow.markdown(
-    """
-<div class="hero">
-  <div><div class="eyebrow">Compliance workspace / AML &amp; CFT</div>
-  <h1>Reconcile.<br>Prove it.</h1>
-  <p>Drop the exports. Challenge every row. Leave with one loud, traceable source of truth.</p></div>
-  <div class="local-badge">● 100% local</div>
-</div>
-<div class="ticker" aria-hidden="true"><span>RAW FILES ✦ CONTROL TOTALS ✦ EXCEPTIONS ✦ AUDIT TRAIL ✦ NO CLOUD ✦ RAW FILES ✦ CONTROL TOTALS ✦ EXCEPTIONS ✦ AUDIT TRAIL ✦ NO CLOUD ✦&nbsp;</span></div>
-<div class="workflow" aria-label="Reconciliation workflow">
-  <div class="step"><b>01</b> Add exports</div>
-  <div class="step"><b>02</b> Review results</div>
-  <div class="step"><b>03</b> Export workbook</div>
-</div>
-""", unsafe_allow_html=True,
-)
+st.markdown(ui.header(), unsafe_allow_html=True)
+workflow_slot = st.empty()
+workflow_slot.markdown(ui.workflow("upload"), unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown('<div class="brand"><span class="brand-mark">AML</span><div>Reconcile Studio<small>TRAINING OPERATIONS</small></div></div>', unsafe_allow_html=True)
-    st.subheader("Classification rules")
-    st.caption("Set how learners are grouped in your report.")
-
-    internal_domains_raw = st.text_area(
-        "Internal email domains",
-        value="safaricom.co.ke",
-        height=76,
-        help="One domain per line, e.g. safaricom.co.ke",
+    st.markdown(ui.brand(), unsafe_allow_html=True)
+    st.header("Workspace preferences")
+    increased_contrast = st.toggle(
+        "Increase contrast", key="increased_contrast",
+        help="Stronger text and boundaries with less shadow. Does not change your reconciliation rules.",
     )
-    internal_markers_raw = st.text_area(
-        "Internal role markers",
-        value="safaricom\nemployee\nstaff\ninternal",
-        height=110,
-        help="If Roles or Staff Category contains one of these markers, the learner is classified as internal.",
-    )
-
+    st.caption("Your preference applies to this session.")
     st.divider()
     st.markdown("**Matching policy**")
-    st.caption("1. User ID\n\n2. Username/email fallback\n\n3. Never fuzzy-match by name")
+    st.caption("User ID first, then username or email. Names are never fuzzy-matched.")
+    st.markdown("**Source records stay intact**")
+    st.caption("Multiple courses and years are preserved. Possible repeats are flagged for review.")
 
-    st.markdown("**Duplicate policy**")
-    st.caption("Multiple courses and multi-year participation are preserved. Only suspicious exact assignment repeats are flagged.")
-
-    st.divider()
-    st.caption("Review the Exceptions tab after each run before sharing your workbook.")
-
-upload_col, guide_col = st.columns([1.55, 1], gap="large")
-
-with upload_col, st.container(border=True):
-    st.subheader("01 / Drop the evidence")
-    st.caption("Multiple courses. Multiple years. One uncompromised audit trail.")
-    uploaded_files = st.file_uploader(
-        "Drop your LMS exports here",
-        type=["xlsx", "xlsm", "xls", "csv"],
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-    )
+if increased_contrast:
     st.markdown(
-        '<div class="small-note">Supported: XLSX, XLSM, XLS and CSV. You can add multiple years, courses and populations in one run.</div>',
+        "<style>" + (Path(__file__).parent / "assets" / "high-contrast.css").read_text() + "</style>",
         unsafe_allow_html=True,
     )
 
-with guide_col, st.container(border=True):
-    st.subheader("02 / Know the output")
-    st.caption("Seven connected worksheets. Every number has somewhere to answer to.")
-    st.markdown("""
-<div class="report-row"><span class="report-num">01</span><div><strong>Management overview</strong><p>Executive Summary, Course Reconciliation and Year Movement</p></div></div>
-<div class="report-row"><span class="report-num">02</span><div><strong>Every learner, every record</strong><p>Participant History and All Records</p></div></div>
-<div class="report-row"><span class="report-num">03</span><div><strong>Controls you can inspect</strong><p>Exceptions and Methodology</p></div></div>
-""", unsafe_allow_html=True)
+upload_col, guide_col = st.columns([1.55, 1], gap="large")
 
-st.divider()
-
-run_left, run_right = st.columns([1.2, 2.8])
-with run_left:
-    run_clicked = st.button(
-        "Run the controls →",
-        type="primary",
-        use_container_width=True,
-        disabled=not uploaded_files,
+with upload_col, st.container(key="upload-card"):
+    st.markdown('<span id="workspace" tabindex="-1"></span>', unsafe_allow_html=True)
+    st.header("Add training exports")
+    st.caption("Combine multiple courses and years in one report.")
+    uploaded_files = st.file_uploader(
+        "Choose Excel or CSV files",
+        type=["xlsx", "xlsm", "xls", "csv"],
+        accept_multiple_files=True,
+        label_visibility="visible",
     )
-with run_right:
-    if uploaded_files:
-        total_size = sum(getattr(f, "size", 0) for f in uploaded_files)
-        st.info(f"Ready: **{len(uploaded_files)} file(s)** • {total_size / (1024*1024):.1f} MB")
+    st.caption("XLSX, XLSM, XLS or CSV. Report titles above column headings are supported.")
+
+    with st.container(key="classification-rules"):
+        st.subheader("Classification rules")
+        st.caption("A matching email domain or role marks a learner as internal. Other learners are classified as external partners.")
+        internal_domains_raw = st.text_area(
+            "Internal email domains", key="internal_domains",
+            value="\n".join(DEFAULT_CONFIG["internal_email_domains"]), height=104,
+            help="Enter domains such as safaricom.co.ke, separated by new lines, commas or semicolons. Do not enter full email addresses or URLs.",
+        )
+        st.caption("Email domains only, for example safaricom.co.ke. Separate entries with new lines or commas.")
+        internal_markers_raw = st.text_area(
+            "Internal role markers", key="internal_markers",
+            value="\n".join(DEFAULT_CONFIG["internal_role_markers"]), height=144,
+            help="One marker per line. A match anywhere in Roles or Staff Category classifies the learner as internal.",
+        )
+        st.caption("Role keywords only, one per line, for example employee or staff.")
+        domains, domain_errors = parse_domains(internal_domains_raw)
+        markers = parse_markers(internal_markers_raw)
+        if domain_errors:
+            st.error("Some domains are invalid. Enter domain names only, without email addresses, spaces or https://.", icon=":material/error:")
+            st.text("Check: " + ", ".join(domain_errors))
+        elif not domains and not markers:
+            st.warning("With both rules empty, every learner will be classified as an external partner.", icon=":material/warning:")
+
+    st.caption(f"Current rules · Email domains: {len(domains)} · Role markers: {len(markers)}")
+    current_signature = (
+        tuple((file.name, hashlib.sha256(file.getbuffer()).hexdigest()) for file in (uploaded_files or [])),
+        tuple(domains), tuple(markers), tuple(domain_errors),
+    )
+    if st.session_state.summary and st.session_state.result_signature != current_signature:
+        st.session_state.export_requested = False
+        st.session_state.result_bytes = None
+        st.session_state.summary = None
+        st.session_state.exceptions_df = None
+        st.session_state.validation_errors = None
+        st.info("Inputs or classification rules changed. Run reconciliation again to refresh your results.", icon=":material/info:")
+
+    if domain_errors:
+        st.caption("Fix the email domains in Classification rules to continue.")
+    elif uploaded_files:
+        total_size = sum(getattr(file, "size", 0) for file in uploaded_files)
+        st.caption(f"Ready to reconcile · Files: {len(uploaded_files)} · {total_size / (1024 * 1024):.1f} MB")
     else:
-        st.info("Add at least one training export to enable the reconciliation engine.")
+        st.caption("Add at least one export to enable reconciliation.")
+    run_clicked = st.button(
+        "Run full reconciliation",
+        type="secondary" if st.session_state.summary else "primary",
+        width="stretch",
+        disabled=not uploaded_files or bool(domain_errors),
+    )
 
-current_signature = (
-    tuple((file.name, hashlib.sha256(file.getbuffer()).hexdigest()) for file in (uploaded_files or [])),
-    internal_domains_raw,
-    internal_markers_raw,
-)
+with guide_col, st.container(key="report-card"):
+    st.header("Your report includes")
+    st.markdown(ui.report_guide(), unsafe_allow_html=True)
+    with st.expander("Help preparing your exports"):
+        st.markdown(
+            "Use the original LMS export with its column headings. Common headings include "
+            "**User ID**, **Email**, **Assignment Title** and **Completion Status**. "
+            "If an import fails, open **Import details** to see the detected headings."
+        )
+        st.caption("Files are processed on the computer or server hosting this app. Temporary processing files are deleted after each run.")
 
-if st.session_state.summary and st.session_state.result_signature != current_signature:
-    st.session_state.result_bytes = None
-    st.session_state.summary = None
-    st.session_state.exceptions_df = None
-    st.session_state.validation_errors = None
-    st.info("Inputs or classification rules changed. Run reconciliation again to refresh your results.")
 
 if run_clicked:
+    st.session_state.export_requested = False
     st.session_state.result_bytes = None
     st.session_state.summary = None
     st.session_state.exceptions_df = None
     st.session_state.validation_errors = None
 
-    status = st.status("Preparing local reconciliation…", expanded=True)
+    status = st.status("Reconciling your training records…", expanded=True)
     try:
         with tempfile.TemporaryDirectory(prefix="aml_recon_") as tmp:
             tmpdir = Path(tmp)
@@ -157,22 +165,14 @@ if run_clicked:
             input_dir.mkdir()
             output_dir.mkdir()
 
-            status.write("Saving uploaded exports to a temporary local workspace…")
+            status.write("Preparing your uploaded exports…")
             for index, file in enumerate(uploaded_files):
                 dest = input_dir / f"{index + 1:03d}_{Path(file.name).name}"
                 dest.write_bytes(file.getbuffer())
 
             cfg = json.loads(json.dumps(DEFAULT_CONFIG))
-            cfg["internal_email_domains"] = [
-                x.strip().lower().lstrip("@")
-                for x in internal_domains_raw.splitlines()
-                if x.strip()
-            ]
-            cfg["internal_role_markers"] = [
-                x.strip().lower()
-                for x in internal_markers_raw.splitlines()
-                if x.strip()
-            ]
+            cfg["internal_email_domains"] = domains
+            cfg["internal_role_markers"] = markers
 
             cfg_path = tmpdir / "config.json"
             cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
@@ -189,6 +189,7 @@ if run_clicked:
             exception_mask = (
                 all_records["Missing Critical Fields"].fillna("").astype(str).str.strip().ne("")
                 | all_records["Exact Repeat Review"].fillna("").astype(str).str.strip().ne("")
+                | all_records["Status Review"].fillna("").astype(str).str.strip().ne("")
                 | all_records["Participant Key"].fillna("").astype(str).str.startswith("UNRESOLVED:")
             )
             exceptions = all_records.loc[exception_mask].copy()
@@ -218,32 +219,42 @@ if run_clicked:
             else:
                 status.update(label="Reconciliation completed successfully", state="complete", expanded=False)
 
+        st.rerun()
+
     except Exception as exc:
         status.update(label="Reconciliation could not be completed", state="error", expanded=True)
-        st.error(str(exc))
+        st.error("These exports could not be reconciled.", icon=":material/error:")
+        st.write("Check that each file contains training records and column headings, then replace the affected file and try again.")
+        with st.expander("Import details", expanded=True):
+            st.text(str(exc))
 
 if st.session_state.summary:
     s = st.session_state.summary
+    workflow_slot.markdown(ui.workflow("export" if st.session_state.export_requested else "review"), unsafe_allow_html=True)
     st.divider()
-    st.subheader("03 / Control room")
+    st.header("Reconciliation results")
 
-    if st.session_state.validation_errors:
-        st.warning("Validation needs review. Inspect the Validation and Exceptions tabs before sharing the workbook.")
+    if st.session_state.validation_errors or s["exceptions"]:
+        st.warning(
+            f"Review required · {s['exceptions']:,} exception records · "
+            f"{len(st.session_state.validation_errors or []):,} validation issues. See Exceptions and Validation before sharing.",
+            icon=":material/warning:",
+        )
     else:
-        st.success("Validation passed — control totals reconcile across the workbook.")
+        st.success("Reconciliation complete. Control totals passed and no exceptions were detected.", icon=":material/check_circle:")
 
-    st.write("")
-    metric_cols = st.columns(3)
+    st.markdown(ui.result_summary(s, bool(st.session_state.validation_errors or s["exceptions"])), unsafe_allow_html=True)
     metrics = [
         ("Assignment rows", f"{s['assignments']:,}"),
         ("Unique participants", f"{s['participants']:,}"),
         ("Completed", f"{s['completed']:,}"),
-        ("Completion rate", f"{s['completion_rate']:.1%}"),
+        ("Source files", f"{len(uploaded_files):,}"),
         ("Passed", f"{s['passed']:,}"),
         ("Exceptions", f"{s['exceptions']:,}"),
     ]
-    for index, (label, value) in enumerate(metrics):
-        metric_cols[index % 3].metric(label, value)
+    for row_start in range(0, len(metrics), 3):
+        for column, (label, value) in zip(st.columns(3), metrics[row_start:row_start + 3]):
+            column.metric(label, value)
 
     tab_overview, tab_population, tab_exceptions, tab_validation = st.tabs(
         ["Overview", "Population", "Exceptions", "Validation"]
@@ -263,58 +274,78 @@ if st.session_state.summary:
                 "Unique participants": [s["internal"], s["external"]],
             }
         )
-        st.dataframe(pop_df, use_container_width=True, hide_index=True)
+        st.table(pop_df)
+        st.caption("Participants may appear in both populations if their source records use different email addresses or roles.")
 
     with tab_exceptions:
         exc_df = st.session_state.exceptions_df
         if exc_df is None or exc_df.empty:
-            st.success("No reconciliation exceptions were detected under the configured rules.")
+            st.success("No reconciliation exceptions were detected under the configured rules.", icon=":material/check_circle:")
         else:
             display_cols = [
                 "Source File", "Participant Key", "Full Name", "Username",
                 "Assignment Title", "Completion Status", "Result Status",
-                "Missing Critical Fields", "Exact Repeat Review",
+                "Missing Critical Fields", "Exact Repeat Review", "Status Review",
             ]
             existing = [c for c in display_cols if c in exc_df.columns]
-            query = st.text_input("Search exceptions", placeholder="Participant, course, source file or issue")
-            filtered = exc_df[existing]
-            if query.strip():
-                matches = filtered.fillna("").astype(str).apply(
-                    lambda column: column.str.contains(query.strip(), case=False, regex=False)
-                ).any(axis=1)
-                filtered = filtered.loc[matches]
-            st.caption(f"Showing {len(filtered):,} of {len(exc_df):,} exception records")
-            st.dataframe(filtered, use_container_width=True, hide_index=True, height=420)
-            st.caption("Exceptions are retained in the final workbook. Nothing is silently deleted.")
+            query = st.text_input(
+                "Search exceptions", placeholder="Participant, course, source file or issue", key="exception_query",
+            )
+            issue = st.selectbox("Issue type", ISSUE_TYPES, key="exception_issue")
+            filtered = filter_exceptions(exc_df[existing], query, issue)
+            st.caption(f"Showing {len(filtered):,} of {len(exc_df):,} exception records · {issue}")
+            if query or issue != ISSUE_TYPES[0]:
+                def clear_filters():
+                    st.session_state.exception_query = ""
+                    st.session_state.exception_issue = ISSUE_TYPES[0]
+                st.button("Clear filters", on_click=clear_filters)
+            if filtered.empty:
+                st.info("No exceptions match these filters. Clear the filters or try a different participant or course.", icon=":material/info:")
+            else:
+                st.dataframe(filtered, use_container_width=True, hide_index=True, height=420)
+                with st.expander("Read individual exception details"):
+                    record = st.selectbox(
+                        "Exception record", range(len(filtered)),
+                        format_func=lambda index: f"Record {index + 1} of {len(filtered)}",
+                    )
+                    for field, value in filtered.iloc[record].items():
+                        st.markdown(f"**{field}**")
+                        st.text("Not provided" if pd.isna(value) or str(value).strip() == "" else str(value))
+            st.caption("Filters only change this preview. Every exception remains in the final workbook.")
 
     with tab_validation:
         if st.session_state.validation_errors:
             for item in st.session_state.validation_errors:
-                st.warning(item)
+                st.warning(item, icon=":material/warning:")
         else:
-            st.success("Course totals = All Records totals")
-            st.success("Year totals = All Records totals")
-            st.success("Population totals = All Records totals")
-            st.success("Participant History = unique Participant Keys")
-            st.success("Completion-state logic is internally consistent")
+            st.markdown("**Control checks passed**")
+            st.markdown(
+                "- Course totals match all records.\n"
+                "- Year totals match all records.\n"
+                "- Participant history matches unique participant keys.\n"
+                "- Completion and pass states are internally consistent."
+            )
 
     st.divider()
-    st.subheader("04 / Take the evidence")
-    d1, d2 = st.columns([1.2, 2.8])
-    with d1:
-        st.download_button(
-            "Download reconciled workbook",
-            data=st.session_state.result_bytes,
-            file_name=st.session_state.result_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True,
-        )
-    with d2:
-        st.success("The output contains the full seven-sheet AML training reconciliation and audit trail.")
+    with st.container(key="export-card"):
+        st.header("Export your report")
+        d1, d2 = st.columns([1.2, 2.8])
+        with d1:
+            st.download_button(
+                "Download reconciled workbook",
+                data=st.session_state.result_bytes,
+                file_name=st.session_state.result_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                width="stretch",
+                on_click=lambda: st.session_state.update(export_requested=True),
+            )
+        with d2:
+            st.caption("Excel workbook · 7 worksheets · Includes all records and exceptions")
+            st.caption("Filters in the Exceptions tab do not change this download.")
 
 else:
-    st.markdown('<div class="empty-state"><h3>Your results will appear here</h3><p>Add your exports, check the classification rules, then run reconciliation to see your training overview.</p></div>', unsafe_allow_html=True)
+    st.markdown(ui.empty_state(), unsafe_allow_html=True)
 
 st.divider()
 with st.expander("Methodology & matching controls"):
@@ -335,4 +366,6 @@ No generative AI is required during processing, which means the same source file
 """
     )
 
-st.markdown('<div class="footer-note">AML Reconcile Studio · Processed locally · Source records preserved · No cloud upload</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer-note">Reconcile Studio · Source records preserved · Rule-based matching</div>', unsafe_allow_html=True)
+
+st.caption("Processing happens on the computer or server running this app. Temporary upload files are deleted after each run.")

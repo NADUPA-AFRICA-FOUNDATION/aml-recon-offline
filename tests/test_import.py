@@ -5,10 +5,22 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 
-from aml_reconcile import DEFAULT_CONFIG, process, read_file
+from aml_reconcile import DEFAULT_CONFIG, process, read_file, normalize
 
 
 class ImportTests(unittest.TestCase):
+    def test_negative_completion_and_result_statuses_are_not_successes(self):
+        frame = pd.DataFrame([{
+            "User ID": "001", "Email": "learner@example.org", "Full Name": "Example",
+            "Assignment ID": "A-1", "Assignment Title": "AML",
+            "Completion Status": "Not Completed", "Result Status": "Not Passed",
+        }])
+        records = normalize(frame, Path("input.csv"), "CSV", DEFAULT_CONFIG, 0)
+        self.assertEqual(int(records.loc[0, "Completed Flag"]), 0)
+        self.assertEqual(int(records.loc[0, "Passed Flag"]), 0)
+        self.assertEqual(int(records.loc[0, "Started Not Completed Flag"]), 0)
+        self.assertEqual(records.loc[0, "Status Review"], "Unknown completion status")
+        self.assertTrue(records.loc[0, "Missing Critical Fields"] == "")
     def test_excel_title_and_blank_rows(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

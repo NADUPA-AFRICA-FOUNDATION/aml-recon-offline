@@ -27,7 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "report_snapshot_date": "2026-09-01",
+
     "internal_email_domains": ["safaricom.co.ke"],
     "internal_role_markers": ["safaricom", "employee", "staff", "internal"],
     "critical_fields": [
@@ -59,11 +59,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "Completion Date": ["completion date", "completed date", "date completed", "completion datetime"]
     },
     "status_rules": {
-        "completed": [r"^\s*completed\b", r"\bcomplete[d]?\b"],
+        "completed": [r"^\s*completed(?:\s+(?:within\s+deadline|out\s*of\s*deadline|late|after\s+deadline))?\s*$"],
         "late": [r"out\s*of\s*deadline", r"outof\s*deadline", r"\blate\b", r"after\s*deadline"],
         "started": [r"started.*not.*completed", r"in\s*progress", r"\bstarted\b"],
         "not_started": [r"not\s*started", r"not\s*commenced"],
-        "passed": [r"^\s*passed\s*$", r"\bpass(ed)?\b"]
+        "passed": [r"^\s*passed\s*$"]
     }
 }
 
@@ -75,7 +75,7 @@ OUTPUT_COLUMNS = [
     "Assignment End", "Completion Status", "Result Status", "Training Hours",
     "Population", "Assignment Year", "Completed Flag", "Passed Flag",
     "Started Not Completed Flag", "Not Started Flag", "Completed Late Flag",
-    "Missing Critical Fields", "Exact Repeat Review"
+    "Missing Critical Fields", "Exact Repeat Review", "Status Review"
 ]
 
 
@@ -271,8 +271,9 @@ def normalize(df: pd.DataFrame, path: Path, sheet: str, cfg: Dict[str, Any], off
     out["Population"] = out.apply(lambda r: population(r, cfg), axis=1)
 
     rules = cfg["status_rules"]
-    out["Completed Flag"] = out["Completion Status"].map(lambda x: int(matches(x, rules["completed"])))
-    out["Passed Flag"] = out["Result Status"].map(lambda x: int(matches(x, rules["passed"])))
+    # Exact status patterns avoid treating “Not Completed” as completed.
+    out["Completed Flag"] = out["Completion Status"].map(lambda x: int(any(re.fullmatch(p, clean(x), re.I) for p in rules["completed"])))
+    out["Passed Flag"] = out["Result Status"].map(lambda x: int(any(re.fullmatch(p, clean(x), re.I) for p in rules["passed"])))
     out["Completed Late Flag"] = out["Completion Status"].map(lambda x: int(matches(x, rules["late"])))
 
     started, not_started = [], []
@@ -287,6 +288,13 @@ def normalize(df: pd.DataFrame, path: Path, sheet: str, cfg: Dict[str, Any], off
         not_started.append(n)
     out["Started Not Completed Flag"] = started
     out["Not Started Flag"] = not_started
+    out["Status Review"] = [
+        "Unknown completion status" if clean(status) and not (completed or started or not_started)
+        else ""
+        for status, completed, started, not_started in zip(
+            out["Completion Status"], out["Completed Flag"], out["Started Not Completed Flag"], out["Not Started Flag"]
+        )
+    ]
 
     out["Assignment Year"] = [
         year_from(b, e, c, src)
@@ -463,8 +471,8 @@ def history(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def exception_rows(df: pd.DataFrame) -> pd.DataFrame:
-    mask = df["Missing Critical Fields"].map(clean).ne("") | df["Exact Repeat Review"].map(clean).ne("") | df["Participant Key"].str.startswith("UNRESOLVED:", na=False)
-    cols = ["Source File", "Participant Key", "User ID", "Full Name", "Username", "Assignment ID", "Assignment Title", "Completion Status", "Result Status", "Missing Critical Fields", "Exact Repeat Review"]
+    mask = df["Missing Critical Fields"].map(clean).ne("") | df["Exact Repeat Review"].map(clean).ne("") | df["Status Review"].map(clean).ne("") | df["Participant Key"].str.startswith("UNRESOLVED:", na=False)
+    cols = ["Source File", "Participant Key", "User ID", "Full Name", "Username", "Assignment ID", "Assignment Title", "Completion Status", "Result Status", "Missing Critical Fields", "Exact Repeat Review", "Status Review"]
     return df.loc[mask, cols].copy()
 
 
@@ -485,19 +493,7 @@ def methodology(cfg: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Control", "Rule", "Purpose", "Treatment", "Source", "Notes"])
 
 
-def validations(all_records: pd.DataFrame, cohorts: pd.DataFrame, years: pd.DataFrame, hist: pd.DataFrame) -> List[str]:
-    errors = []
-    total = len(all_records)
-    if int(cohorts["Rows"].sum()) != total:
-        errors.append("Course Reconciliation assignment rows do not equal All Records.")
-    if int(years["Assignment Rows"].sum()) != total:
-        errors.append("Year Movement assignment rows do not equal All Records.")
-    if len(hist) != all_records["Participant Key"].nunique():
-        errors.append("Participant History rows do not equal unique Participant Keys.")
-    states = all_records["Completed Flag"] + all_records["Started Not Completed Flag"] + all_records["Not Started Flag"]
-    if (states > 1).any():
-        errors.append("Some rows have conflicting completion-state flags.")
-    return errors
+
 
 
 def executive_population(df: pd.DataFrame) -> pd.DataFrame:
@@ -702,14 +698,24 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
     if not files:
         raise FileNotFoundError(f"No Excel/CSV files found in {input_dir.resolve()}")
 
+    limits = cfg.get("limits", DEFAULT_CONFIG["limits"])
+    if len(files) > limits["max_files"]:
+        raise ValueError(f"Too many input files ({len(files)}); maximum is {limits['max_files']}.")
+    total_bytes = sum(path.stat().st_size for path in files)
+    if total_bytes > limits["max_total_mb"] * 1024 * 1024:
+        raise ValueError(f"Input files exceed the {limits['max_total_mb']} MB total limit.")
     frames, offset = [], 0
     import_notes = []
     print("Reading source files...")
     for path in files:
+        if path.stat().st_size > limits["max_file_mb"] * 1024 * 1024:
+            raise ValueError(f"{path.name} exceeds the configured {limits['max_file_mb']} MB per-file limit.")
         file_count = 0
         for sheet, df in read_file(path, cfg["column_aliases"]):
             headings = ", ".join(str(column) for column in df.columns[:12])
             import_notes.append(f"{path.name} / {sheet}: {len(df)} rows; headings: {headings or 'none'}")
+            if len(df) > limits["max_rows"] or len(df.columns) > limits["max_columns"]:
+                raise ValueError(f"{path.name} / {sheet} exceeds the configured {limits['max_rows']}-row or {limits['max_columns']}-column limit.")
             n = normalize(df, path, sheet, cfg, offset)
             meaningful = n[["User ID", "Username", "Full Name", "Assignment ID", "Assignment Title", "Completion Status"]].fillna("").astype(str).apply(lambda c: c.str.strip()).ne("").any(axis=1)
             n = n.loc[meaningful].copy()
@@ -729,10 +735,14 @@ def process(input_dir: Path, output_path: Path, cfg: Dict[str, Any]) -> tuple[pd
             "Detected tables: " + "; ".join(import_notes)
         )
 
+    accepted_sources = {str(frame["Source File"].iloc[0]).split(" | ")[0] for frame in frames if not frame.empty}
+    missing_sources = [path.name for path in files if path.name not in accepted_sources]
+
     all_records = flag_repeats(pd.concat(frames, ignore_index=True))
     hist = history(all_records)
     exc = exception_rows(all_records)
     meth = methodology(cfg)
+
     pop = executive_population(all_records)
     closed_years, lifecycle, active_mask = lifecycle_tables(all_records, cfg)
     years = year_summary(all_records, active_mask)

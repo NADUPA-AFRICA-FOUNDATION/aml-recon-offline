@@ -1,0 +1,52 @@
+/* Shared by the system preference and the explicit session preference. */
+:root {
+  --color-surface: #F8FAF9;
+  --color-surface-white: #FFFFFF;
+  --color-foreground: #10291F;
+  --color-muted: #344E41;
+  --color-control-line: #344E41;
+  --color-divider: #738C7E;
+  --shadow-raised: none;
+  --shadow-raised-hover: none;
+  --shadow-small: none;
+  --shadow-inset: none;
+  --shadow-inset-deep: none;
+  --shadow-brand: none;
+}
+.stApp, .stApp p, .stApp label, .stApp [data-testid="stCaptionContainer"] {
+  color: var(--color-foreground);
+}
+.stApp [data-testid="stCaptionContainer"], .stApp .small-note, .stApp .footer-note {
+  color: var(--color-muted);
+}
+.stButton > button, .stDownloadButton > button,
+[data-testid="stFileUploaderDropzone"] button {
+  color: var(--color-foreground);
+  background: var(--color-surface-white);
+  border: 2px solid var(--color-control-line);
+}
+.stApp button[kind="primary"] {
+  color: var(--color-on-brand);
+  background: var(--color-brand-dark);
+  border-color: var(--color-brand-dark);
+}
+.stApp button:disabled {
+  color: var(--color-muted);
+  background: var(--color-surface);
+  border-color: var(--color-control-line);
+}
+.stApp :is(input, textarea, [data-baseweb="select"] > div) {
+  border-width: 2px;
+}
+.st-key-upload-card, .st-key-report-card, .st-key-export-card,
+.workflow, .empty-state, [data-testid="stMetric"] {
+  border: 1px solid var(--color-control-line);
+}
+.step.active, [data-baseweb="tab"][aria-selected="true"] {
+  outline: 2px solid var(--color-brand-dark);
+  outline-offset: -2px;
+}
+.st-key-upload-card .stButton > button,
+.st-key-export-card .stDownloadButton > button {
+  width: 100%;
+}
