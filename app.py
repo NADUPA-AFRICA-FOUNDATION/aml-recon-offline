@@ -27,7 +27,7 @@ st.markdown(
         for name in ("tokens.css", "studio.css")
     ) + "\n@media (prefers-contrast: more) {"
     + (Path(__file__).parent / "assets" / "high-contrast.css").read_text()
-    + "}</style>",
+    + "}\n</style>",
     unsafe_allow_html=True,
 )
 
@@ -133,7 +133,7 @@ with upload_col, st.container(key="upload-card"):
     run_clicked = st.button(
         "Run full reconciliation",
         type="secondary" if st.session_state.summary else "primary",
-        use_container_width=True,
+        width="stretch",
         disabled=not uploaded_files or bool(domain_errors),
     )
 
@@ -337,7 +337,7 @@ if st.session_state.summary:
                 file_name=st.session_state.result_name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 on_click=lambda: st.session_state.update(export_requested=True),
             )
         with d2:

@@ -9,7 +9,7 @@
   --color-surface: #E8F0EB;
   --color-surface-white: #F8FAF9;
   --color-foreground: #17352A;
-  --color-muted: #557064;
+  --color-muted: #3F5D4E;
   --color-on-brand: #FFFFFF;
   --color-action: var(--color-brand-dark);
   --color-action-hover: #006332;
@@ -24,8 +24,8 @@
   --color-info: #1479B8;
   --color-info-ink: #125D8A;
   --color-info-surface: #EDF5FA;
-  --color-control-line: #738C7E;
-  --color-divider: #CCDAD1;
+  --color-control-line: #4F6B5C;
+  --color-divider: #B7C9BD;
   --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-caption: .75rem;
   --font-small: .875rem;
