@@ -189,6 +189,7 @@ if run_clicked:
             exception_mask = (
                 all_records["Missing Critical Fields"].fillna("").astype(str).str.strip().ne("")
                 | all_records["Exact Repeat Review"].fillna("").astype(str).str.strip().ne("")
+                | all_records["Status Review"].fillna("").astype(str).str.strip().ne("")
                 | all_records["Participant Key"].fillna("").astype(str).str.startswith("UNRESOLVED:")
             )
             exceptions = all_records.loc[exception_mask].copy()
@@ -284,7 +285,7 @@ if st.session_state.summary:
             display_cols = [
                 "Source File", "Participant Key", "Full Name", "Username",
                 "Assignment Title", "Completion Status", "Result Status",
-                "Missing Critical Fields", "Exact Repeat Review",
+                "Missing Critical Fields", "Exact Repeat Review", "Status Review",
             ]
             existing = [c for c in display_cols if c in exc_df.columns]
             query = st.text_input(
@@ -317,13 +318,12 @@ if st.session_state.summary:
             for item in st.session_state.validation_errors:
                 st.warning(item, icon=":material/warning:")
         else:
-            st.markdown("**All five control checks passed**")
+            st.markdown("**Control checks passed**")
             st.markdown(
                 "- Course totals match all records.\n"
                 "- Year totals match all records.\n"
-                "- Population totals match all records.\n"
                 "- Participant history matches unique participant keys.\n"
-                "- Completion states are internally consistent."
+                "- Completion and pass states are internally consistent."
             )
 
     st.divider()
