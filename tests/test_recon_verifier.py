@@ -37,7 +37,7 @@ class VerifierTests(unittest.TestCase):
         self.assertEqual(config["recon"]["header_row"], 3)
         self.assertEqual(config["recon"]["source_file_transform"]["repl"], "Training Progress Report_")
         self.assertEqual(config["field_map"]["Assignment Info::Assignement title"], "Assignment Title")
-        self.assertEqual(config["summary_checks"][1]["data_end_row"], 8)
+        self.assertEqual(config["summary_checks"][1]["data_end_row"], 9)
         self.assertEqual(config["cell_checks"][-1]["cell"], "I9")
 
     def fixture(self, root, mismatch=False):

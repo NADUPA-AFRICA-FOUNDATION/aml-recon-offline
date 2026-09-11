@@ -1,4 +1,5 @@
 {
+  "report_snapshot_date": "2026-09-01",
   "internal_email_domains": ["safaricom.co.ke"],
   "internal_role_markers": ["safaricom", "employee", "staff", "internal"],
   "critical_fields": [

@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 import pandas as pd
+from openpyxl import load_workbook
 
 from aml_reconcile import DEFAULT_CONFIG, process, read_file, normalize
 
@@ -85,6 +86,46 @@ class ImportTests(unittest.TestCase):
             self.assertEqual(records.loc[0, "User ID"], "001")
             self.assertEqual(records.loc[0, "Assignment ID"], "A-1")
             self.assertEqual(records.loc[0, "Assignment Begin"], pd.Timestamp("2026-01-01"))
+
+    def test_executive_summary_separates_active_and_closed_cohorts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "training.csv"
+            pd.DataFrame([
+                {"User ID": "1", "Full Name": "Closed", "Assignment ID": "A", "Assignment Status": "Past Assignment", "Assignment Begin": "2025-01-01", "Assignment End": "2025-12-31", "Completion Status": "Completed", "Result Status": "Passed"},
+                {"User ID": "2", "Full Name": "Active", "Assignment ID": "B", "Assignment Status": "Active Assignment", "Assignment Begin": "2026-01-01", "Assignment End": "2026-12-31", "Completion Status": "Not Started", "Result Status": ""},
+                {"User ID": "3", "Full Name": "Closed 2026", "Assignment ID": "C", "Assignment Status": "Past Assignment", "Assignment Begin": "2026-01-01", "Assignment End": "2026-08-31", "Completion Status": "Not Started", "Result Status": ""},
+            ]).to_csv(source, index=False)
+            output = root / "result.xlsx"
+
+            process(root, output, DEFAULT_CONFIG)
+            ws = load_workbook(output, data_only=True)["Executive Summary"]
+
+            self.assertEqual(ws["A1"].value, "AML Training Reconciliation — Reaudited")
+            self.assertEqual(ws["A9"].value, 2)
+            self.assertEqual(ws["C9"].value, 1)
+            self.assertEqual(ws["H14"].value, "Closed at snapshot")
+            self.assertEqual(ws["H15"].value, "Active at snapshot")
+            self.assertEqual(ws["A25"].value, "Population Summary")
+            self.assertEqual(ws["A26"].value, "Population")
+
+            course_ws = load_workbook(output, data_only=True)["Course Reconciliation"]
+            self.assertEqual(course_ws["A1"].value, "Course & Cohort Reconciliation")
+            self.assertEqual(course_ws["A5"].value, "Course-Level Summary")
+            self.assertEqual(course_ws["A10"].value, "Assignment Cohort Performance")
+            self.assertEqual(course_ws["A11"].value, "Assignment ID")
+            self.assertEqual(course_ws["C12"].value, "Closed at snapshot")
+            self.assertEqual(course_ws["C13"].value, "Active at snapshot")
+
+            year_ws = load_workbook(output, data_only=True)["Year Movement"]
+            self.assertEqual(year_ws["A1"].value, "Year Movement")
+            self.assertEqual(year_ws["A5"].value, "Assignment Year")
+            self.assertEqual(year_ws["B6"].value, "Closed at snapshot")
+            self.assertEqual(year_ws["B7"].value, "Active at snapshot")
+            self.assertEqual(year_ws["B8"].value, "Closed at snapshot")
+            self.assertEqual(year_ws["A12"].value, "Closed-Cohort Trend")
+            self.assertEqual(year_ws["A13"].value, "Year")
+            self.assertEqual(year_ws["F15"].value, -1)
 
 
 if __name__ == '__main__':

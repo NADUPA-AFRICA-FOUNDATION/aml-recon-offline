@@ -69,7 +69,10 @@ python3 aml_reconcile.py --input ./input --output ./output/AML_Training_Full_Rec
 
 ## Organisation-specific settings
 
-Edit `config.json` to change the internal email domain, internal staff role markers, or critical fields.
+Edit `config.json` to change the management-view snapshot date, internal email
+domain, internal staff role markers, or critical fields. The Executive Summary
+separates assignments active on `report_snapshot_date` from closed cohorts so
+in-flight non-completions do not distort closed-cohort performance.
 
 The script already knows many common LMS heading aliases. If your source headings are different, add them to `column_aliases` in `aml_reconcile.py`.
 
